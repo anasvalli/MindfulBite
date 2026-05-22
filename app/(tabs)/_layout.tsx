@@ -87,7 +87,6 @@ export default function TabLayout() {
         options={{
           title: t('insights'),
           tabBarIcon: ({ color }) => <PieChart color={color} size={22} />,
-          href: null,
         }}
       />
       <Tabs.Screen

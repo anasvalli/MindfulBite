@@ -61,11 +61,23 @@ export default function ProfileScreen() {
   }
 
   async function updateProfile() {
+    const parsedWeight = weight.trim() ? parseFloat(weight) : null;
+    const parsedGoalWeight = goalWeight.trim() ? parseFloat(goalWeight) : null;
+
+    if (weight.trim() && (isNaN(parsedWeight!) || parsedWeight! <= 0)) {
+      alert('Invalid Weight', 'Please enter a valid positive number for current weight.');
+      return;
+    }
+    if (goalWeight.trim() && (isNaN(parsedGoalWeight!) || parsedGoalWeight! <= 0)) {
+      alert('Invalid Goal Weight', 'Please enter a valid positive number for goal weight.');
+      return;
+    }
+
     setSaving(true);
     const { error } = await supabase.from('users').update({
       full_name: fullName.trim(),
-      weight: parseFloat(weight) || null,
-      goal_weight: parseFloat(goalWeight) || null,
+      weight: parsedWeight,
+      goal_weight: parsedGoalWeight,
       country: country.trim() || null,
       city: city.trim() || null,
       updated_at: new Date().toISOString(),

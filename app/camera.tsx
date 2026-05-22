@@ -18,16 +18,12 @@ export default function CameraScreen() {
   const { tier } = usePurchases();
 
   const CAMERA_LIMIT = 3;
-  const todayKey = `camera_count_${new Date().toISOString().split('T')[0]}`;
+  const _d = new Date();
+  const todayKey = `camera_count_${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
 
   async function getDailyCameraCount(): Promise<number> {
     const val = await SecureStore.getItemAsync(todayKey);
     return val ? parseInt(val) : 0;
-  }
-
-  async function incrementDailyCount() {
-    const current = await getDailyCameraCount();
-    await SecureStore.setItemAsync(todayKey, String(current + 1));
   }
 
   if (!permission) {
@@ -62,7 +58,6 @@ export default function CameraScreen() {
 
         const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.3 });
         if (photo) {
-          if (tier === 'Basic') await incrementDailyCount();
           analyzeFood(photo.uri, photo.base64);
         } else {
           setProcessing(false);
@@ -87,7 +82,7 @@ export default function CameraScreen() {
       setProcessing(false);
       router.push({
         pathname: '/meal-correction',
-        params: { imageUri: uri, aiResult: JSON.stringify(aiItems) }
+        params: { imageUri: uri, aiResult: JSON.stringify(aiItems), cameraLimitKey: todayKey }
       });
     } catch (error) {
       console.error(error);

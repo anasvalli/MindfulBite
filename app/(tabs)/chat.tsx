@@ -25,7 +25,8 @@ export default function ChatScreen() {
   const [showUpgrade, setShowUpgrade] = useState(false);
 
   const DAILY_LIMIT = 8;
-  const todayKey = `chat_count_${new Date().toISOString().split('T')[0]}`;
+  const _d = new Date();
+  const todayKey = `chat_count_${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
 
   async function getDailyCount(): Promise<number> {
     const val = await SecureStore.getItemAsync(todayKey);

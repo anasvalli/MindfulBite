@@ -1,18 +1,35 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, ActivityIndicator, Alert, Modal, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from './context/AuthContext';
+import { usePurchases } from './context/PurchasesContext';
+import { useAppTheme } from './context/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { Check, Edit3, Trash2 } from 'lucide-react-native';
+import { Check, Edit3, Trash2, Plus, X } from 'lucide-react-native';
+import * as SecureStore from 'expo-secure-store';
+
+interface FoodItem {
+  id: string;
+  name: string;
+  quantity: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+const EMPTY_ITEM: Omit<FoodItem, 'id'> = { name: '', quantity: '', calories: 0, protein: 0, carbs: 0, fat: 0 };
 
 export default function MealCorrectionScreen() {
-  const { imageUri, aiResult } = useLocalSearchParams();
+  const { imageUri, aiResult, cameraLimitKey } = useLocalSearchParams();
   const { user } = useAuth();
+  const { tier } = usePurchases();
+  const { resolvedScheme } = useAppTheme();
+  const isDark = resolvedScheme === 'dark';
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  // Initialize with AI detection results or mock
-  const [items, setItems] = useState<any[]>(() => {
+  const [items, setItems] = useState<FoodItem[]>(() => {
     if (aiResult) {
       try {
         const parsed = JSON.parse(String(aiResult));
@@ -24,112 +41,277 @@ export default function MealCorrectionScreen() {
     return [
       { id: '1', name: 'Grilled Chicken Breast', quantity: '200g', calories: 330, protein: 62, carbs: 0, fat: 7 },
       { id: '2', name: 'Brown Rice', quantity: '1 cup', calories: 215, protein: 5, carbs: 45, fat: 2 },
-      { id: '3', name: 'Steamed Broccoli', quantity: '1 cup', calories: 55, protein: 4, carbs: 11, fat: 0 }
+      { id: '3', name: 'Steamed Broccoli', quantity: '1 cup', calories: 55, protein: 4, carbs: 11, fat: 0 },
     ];
   });
 
-  const totalCalories = items.reduce((acc, item) => acc + item.calories, 0);
+  // Edit modal state
+  const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
+  const [editForm, setEditForm] = useState<Omit<FoodItem, 'id'>>(EMPTY_ITEM);
+
+  // Add modal state
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addForm, setAddForm] = useState<Omit<FoodItem, 'id'>>(EMPTY_ITEM);
+
+  const totalCalories = items.reduce((acc, item) => acc + Number(item.calories), 0);
+  const totalProtein = items.reduce((acc, i) => acc + Number(i.protein), 0);
+  const totalCarbs = items.reduce((acc, i) => acc + Number(i.carbs), 0);
+  const totalFat = items.reduce((acc, i) => acc + Number(i.fat), 0);
+
+  // ── Colors ──────────────────────────────────────────────────────────────────
+  const bg = isDark ? '#09090B' : '#F8FAFC';
+  const cardBg = isDark ? '#1E293B' : '#FFFFFF';
+  const itemBg = isDark ? '#0F172A' : '#F8FAFC';
+  const textPrimary = isDark ? '#F8FAFC' : '#0F172A';
+  const textSecondary = isDark ? '#94A3B8' : '#64748B';
+  const borderColor = isDark ? '#334155' : '#E2E8F0';
+  const inputBg = isDark ? '#1E293B' : '#FFFFFF';
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
+  const openEdit = (item: FoodItem) => {
+    setEditingItem(item);
+    setEditForm({ name: item.name, quantity: item.quantity, calories: item.calories, protein: item.protein, carbs: item.carbs, fat: item.fat });
+  };
+
+  const saveEdit = () => {
+    if (!editingItem) return;
+    setItems(prev => prev.map(i => i.id === editingItem.id ? { ...editForm, id: editingItem.id } : i));
+    setEditingItem(null);
+  };
+
+  const saveAdd = () => {
+    if (!addForm.name.trim()) {
+      Alert.alert('Missing Name', 'Please enter a food name.');
+      return;
+    }
+    setItems(prev => [...prev, { ...addForm, id: String(Date.now()) }]);
+    setAddForm(EMPTY_ITEM);
+    setAddModalOpen(false);
+  };
+
+  const removeItem = (id: string) => {
+    setItems(prev => prev.filter(i => i.id !== id));
+  };
 
   const handleSave = async () => {
     if (!user) return;
     setLoading(true);
 
-    const macros = {
-      protein: items.reduce((acc, i) => acc + i.protein, 0),
-      carbs: items.reduce((acc, i) => acc + i.carbs, 0),
-      fat: items.reduce((acc, i) => acc + i.fat, 0)
-    };
+    const macros = { protein: totalProtein, carbs: totalCarbs, fat: totalFat };
 
     const { data, error } = await supabase.from('meals').insert({
       user_id: user.id,
       image_url: imageUri ? String(imageUri) : null,
       items_json: items,
       total_calories: totalCalories,
-      macros_json: macros
+      macros_json: macros,
     }).select().single();
+
+    if (!error && tier === 'Basic' && cameraLimitKey) {
+      const key = String(cameraLimitKey);
+      const val = await SecureStore.getItemAsync(key);
+      const current = val ? parseInt(val) : 0;
+      await SecureStore.setItemAsync(key, String(current + 1));
+    }
 
     setLoading(false);
 
     if (error) {
       Alert.alert('Error saving meal', error.message);
-      // fallback just push anyway for testing flow
       router.replace({ pathname: '/mood-picker', params: { mealId: 'mock-id', mealName: items[0]?.name || 'a meal' } });
     } else {
       router.replace({ pathname: '/mood-picker', params: { mealId: data.id, mealName: items[0]?.name || 'a meal' } });
     }
   };
 
-  const removeItem = (id: string) => {
-    setItems(items.filter(i => i.id !== id));
-  };
+  // ── Item Form (shared by edit + add modals) ──────────────────────────────────
+  const ItemForm = ({ form, setForm }: { form: Omit<FoodItem, 'id'>; setForm: (f: Omit<FoodItem, 'id'>) => void }) => (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={{ gap: 10 }}>
+        <View>
+          <Text style={[styles.label, { color: textSecondary }]}>Food Name</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: inputBg, color: textPrimary, borderColor }]}
+            value={form.name}
+            onChangeText={v => setForm({ ...form, name: v })}
+            placeholder="e.g. Grilled Salmon"
+            placeholderTextColor="#94A3B8"
+          />
+        </View>
+        <View>
+          <Text style={[styles.label, { color: textSecondary }]}>Quantity / Serving</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: inputBg, color: textPrimary, borderColor }]}
+            value={form.quantity}
+            onChangeText={v => setForm({ ...form, quantity: v })}
+            placeholder="e.g. 200g or 1 cup"
+            placeholderTextColor="#94A3B8"
+          />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          {([['Calories', 'calories'], ['Protein (g)', 'protein'], ['Carbs (g)', 'carbs'], ['Fat (g)', 'fat']] as [string, keyof Omit<FoodItem, 'id' | 'name' | 'quantity'>][]).map(([label, key]) => (
+            <View key={key} style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: textSecondary, fontSize: 10 }]}>{label}</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: inputBg, color: textPrimary, borderColor, paddingHorizontal: 8 }]}
+                value={String(form[key] ?? '')}
+                onChangeText={v => setForm({ ...form, [key]: parseFloat(v) || 0 })}
+                keyboardType="numeric"
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+          ))}
+        </View>
+      </View>
+    </KeyboardAvoidingView>
+  );
 
   return (
-    <View className="flex-1 bg-gray-50 dark:bg-zinc-900">
+    <View style={{ flex: 1, backgroundColor: bg }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Header Image */}
         {imageUri ? (
-          <Image source={{ uri: String(imageUri) }} className="w-full h-64 bg-gray-200" resizeMode="cover" />
+          <Image source={{ uri: String(imageUri) }} style={{ width: '100%', height: 256, backgroundColor: '#1E293B' }} resizeMode="cover" />
         ) : (
-          <View className="w-full h-64 bg-green-900 items-center justify-center">
-            <Text className="text-white text-lg font-bold">Image Preview</Text>
+          <View style={{ width: '100%', height: 256, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>Image Preview</Text>
           </View>
         )}
 
-        <View className="p-6 -mt-6 bg-white dark:bg-zinc-900 rounded-t-3xl shadow-sm">
-          <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-2">AI Estimated Meal</Text>
-          <Text className="text-gray-500 dark:text-gray-400 mb-6">Review and correct the detected items.</Text>
+        <View style={{ padding: 24, marginTop: -24, backgroundColor: cardBg, borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: textPrimary, marginBottom: 4 }}>AI Estimated Meal</Text>
+          <Text style={{ color: textSecondary, marginBottom: 20 }}>Review and correct the detected items.</Text>
 
-          <View className="flex-row justify-between mb-6 bg-green-50 dark:bg-green-900/20 p-4 rounded-2xl border border-green-100 dark:border-green-900/50">
+          {/* Totals */}
+          <View style={{
+            flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20,
+            backgroundColor: 'rgba(111,175,79,0.1)', padding: 16, borderRadius: 16,
+            borderWidth: 1, borderColor: 'rgba(111,175,79,0.2)'
+          }}>
             <View>
-              <Text className="text-sm text-green-700 dark:text-green-400 font-semibold mb-1">Total Calories</Text>
-              <Text className="text-3xl font-black text-green-600">{totalCalories}</Text>
+              <Text style={{ fontSize: 12, color: '#6FAF4F', fontWeight: '700', marginBottom: 4 }}>Total Calories</Text>
+              <Text style={{ fontSize: 30, fontWeight: '900', color: '#6FAF4F' }}>{totalCalories}</Text>
             </View>
-            <View className="justify-end items-end">
-              <Text className="text-gray-500 dark:text-gray-400 text-sm">P: {items.reduce((a,b)=>a+b.protein,0)}g</Text>
-              <Text className="text-gray-500 dark:text-gray-400 text-sm">C: {items.reduce((a,b)=>a+b.carbs,0)}g</Text>
-              <Text className="text-gray-500 dark:text-gray-400 text-sm">F: {items.reduce((a,b)=>a+b.fat,0)}g</Text>
+            <View style={{ alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+              <Text style={{ color: textSecondary, fontSize: 12 }}>P: {totalProtein}g</Text>
+              <Text style={{ color: textSecondary, fontSize: 12 }}>C: {totalCarbs}g</Text>
+              <Text style={{ color: textSecondary, fontSize: 12 }}>F: {totalFat}g</Text>
             </View>
           </View>
 
+          {/* Food Items */}
           {items.map((item) => (
-            <View key={item.id} className="mb-4 bg-gray-50 dark:bg-zinc-800 p-4 rounded-2xl flex-row justify-between items-center shadow-sm">
-              <View className="flex-1 pr-4">
-                <Text className="text-lg font-bold text-gray-900 dark:text-white mb-1">{item.name}</Text>
-                <Text className="text-gray-500 dark:text-gray-400">{item.quantity} • {item.calories} kcal</Text>
+            <View key={item.id} style={{
+              marginBottom: 12, backgroundColor: itemBg, padding: 16,
+              borderRadius: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: textPrimary, marginBottom: 2 }}>{item.name}</Text>
+                <Text style={{ color: textSecondary, fontSize: 13 }}>{item.quantity} • {item.calories} kcal</Text>
               </View>
-              <View className="flex-row">
-                <TouchableOpacity className="p-2 mr-2 bg-white dark:bg-zinc-700 rounded-full shadow-sm">
-                  <Edit3 color="#6b7280" size={20} />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => openEdit(item)}
+                  style={{ padding: 8, backgroundColor: isDark ? '#334155' : '#FFFFFF', borderRadius: 20 }}
+                >
+                  <Edit3 color={textSecondary} size={18} />
                 </TouchableOpacity>
-                <TouchableOpacity className="p-2 bg-red-50 dark:bg-red-900/20 rounded-full" onPress={() => removeItem(item.id)}>
-                  <Trash2 color="#ef4444" size={20} />
+                <TouchableOpacity
+                  onPress={() => removeItem(item.id)}
+                  style={{ padding: 8, backgroundColor: 'rgba(244,63,94,0.08)', borderRadius: 20 }}
+                >
+                  <Trash2 color="#f43f5e" size={18} />
                 </TouchableOpacity>
               </View>
             </View>
           ))}
 
-          <TouchableOpacity className="py-4 border-2 border-dashed border-gray-300 dark:border-zinc-700 rounded-2xl items-center mt-2">
-            <Text className="text-gray-500 dark:text-gray-400 font-semibold">+ Add Missing Item</Text>
+          {/* Add Missing Item */}
+          <TouchableOpacity
+            onPress={() => { setAddForm(EMPTY_ITEM); setAddModalOpen(true); }}
+            style={{
+              borderWidth: 2, borderStyle: 'dashed', borderColor: isDark ? '#334155' : '#CBD5E1',
+              borderRadius: 18, paddingVertical: 16, alignItems: 'center', marginTop: 4,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Plus color="#6FAF4F" size={18} />
+              <Text style={{ color: '#6FAF4F', fontWeight: '700', fontSize: 15 }}>Add Missing Item</Text>
+            </View>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* Floating Save Button */}
-      <View className="absolute bottom-6 left-6 right-6">
-        <TouchableOpacity 
-          className="bg-green-500 p-4 rounded-2xl flex-row items-center justify-center shadow-lg"
-          style={{ elevation: 5 }}
+      {/* Save Button */}
+      <View style={{ position: 'absolute', bottom: 24, left: 24, right: 24 }}>
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#6FAF4F', padding: 18, borderRadius: 18,
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+            shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6,
+          }}
           onPress={handleSave}
           disabled={loading}
         >
-          {loading ? (
-            <ActivityIndicator color="white" className="mr-2" />
-          ) : (
-            <Check color="white" size={24} className="mr-2" />
-          )}
-          <Text className="text-white font-bold text-xl">Confirm & Log Meal</Text>
+          {loading ? <ActivityIndicator color="white" style={{ marginRight: 8 }} /> : <Check color="white" size={22} style={{ marginRight: 8 }} />}
+          <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 18 }}>Confirm & Log Meal</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ── Edit Modal ─────────────────────────────────────────────────────────── */}
+      <Modal visible={!!editingItem} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: cardBg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: textPrimary }}>Edit Food Item</Text>
+              <TouchableOpacity onPress={() => setEditingItem(null)}>
+                <X color={textSecondary} size={24} />
+              </TouchableOpacity>
+            </View>
+            <ItemForm form={editForm} setForm={setEditForm} />
+            <TouchableOpacity
+              onPress={saveEdit}
+              style={{ backgroundColor: '#6FAF4F', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 20 }}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Save Changes</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Add Modal ──────────────────────────────────────────────────────────── */}
+      <Modal visible={addModalOpen} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: cardBg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: textPrimary }}>Add Food Item</Text>
+              <TouchableOpacity onPress={() => setAddModalOpen(false)}>
+                <X color={textSecondary} size={24} />
+              </TouchableOpacity>
+            </View>
+            <ItemForm form={addForm} setForm={setAddForm} />
+            <TouchableOpacity
+              onPress={saveAdd}
+              style={{ backgroundColor: '#6FAF4F', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 20 }}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Add Item</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  input: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    fontSize: 15,
+  },
+});

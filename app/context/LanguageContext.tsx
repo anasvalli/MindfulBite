@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import * as SecureStore from 'expo-secure-store';
 
 type Language = string;
 
@@ -114,7 +115,18 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<Language>('English');
+  const [language, setLanguageState] = useState<Language>('English');
+
+  useEffect(() => {
+    SecureStore.getItemAsync('app_language').then(saved => {
+      if (saved) setLanguageState(saved);
+    });
+  }, []);
+
+  const setLanguage = (lang: Language) => {
+    setLanguageState(lang);
+    SecureStore.setItemAsync('app_language', lang);
+  };
 
   const t = (key: string) => {
     return translations[key]?.[language] || translations[key]?.['English'] || key;

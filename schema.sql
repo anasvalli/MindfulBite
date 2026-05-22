@@ -1,4 +1,5 @@
 -- Supabase Database Schema for MindfulBite
+-- This file reflects the actual live database structure.
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -6,6 +7,9 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- USERS TABLE
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
+  username TEXT,
+  full_name TEXT,
+  avatar_url TEXT,
   age INTEGER,
   gender TEXT,
   weight NUMERIC,
@@ -14,7 +18,11 @@ CREATE TABLE IF NOT EXISTS public.users (
   goal_weight NUMERIC,
   daily_calorie_goal NUMERIC,
   dietary_prefs TEXT,
-  tier TEXT DEFAULT 'free',
+  wake_time TEXT,
+  sleep_time TEXT,
+  country TEXT,
+  city TEXT,
+  subscription_tier TEXT DEFAULT 'Basic',
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -22,7 +30,7 @@ CREATE TABLE IF NOT EXISTS public.users (
 -- MEALS TABLE
 CREATE TABLE IF NOT EXISTS public.meals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES public.users(id) NOT NULL,
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
   image_url TEXT,
   items_json JSONB,
   total_calories NUMERIC,
@@ -62,5 +70,17 @@ CREATE POLICY "Users can insert own moods" ON public.meal_moods FOR INSERT WITH 
 CREATE POLICY "Users can update own moods" ON public.meal_moods FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own moods" ON public.meal_moods FOR DELETE USING (auth.uid() = user_id);
 
--- Helper triggers to automatically insert a user profile upon sign up could be added here, 
--- but the client application explicitly UPSERTs into the users table so it's not strictly required.
+-- Function to delete a user's account and all associated data
+-- Called via supabase.rpc('delete_user_account') from the app
+CREATE OR REPLACE FUNCTION public.delete_user_account()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  DELETE FROM public.meal_moods WHERE user_id = auth.uid();
+  DELETE FROM public.meals WHERE user_id = auth.uid();
+  DELETE FROM public.users WHERE id = auth.uid();
+  DELETE FROM auth.users WHERE id = auth.uid();
+END;
+$$;

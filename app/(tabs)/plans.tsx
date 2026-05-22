@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { parseTime12h } from '../../lib/time';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Sparkles, Clock, BellRing, PlusCircle } from 'lucide-react-native';
 import { useLanguage } from '../context/LanguageContext';
@@ -15,18 +16,6 @@ import UpgradeModal from '../../components/UpgradeModal';
 import * as Notifications from 'expo-notifications';
 import { useAppTheme } from '../context/ThemeContext';
 
-function parseTime12h(timeStr: string): Date | null {
-  if (!timeStr) return null;
-  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-  if (!match) return null;
-  let h = parseInt(match[1]);
-  const m = parseInt(match[2]);
-  const period = match[3].toUpperCase();
-  if (period === 'PM' && h !== 12) h += 12;
-  if (period === 'AM' && h === 12) h = 0;
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
-}
 
 export default function PlansScreen() {
   const { t, language } = useLanguage();
