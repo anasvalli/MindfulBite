@@ -1,15 +1,29 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Modal, FlatList, useColorScheme, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  ScrollView,
+  Modal,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'expo-router';
-import { ChevronDown, Leaf } from 'lucide-react-native';
+import { ChevronDown } from 'lucide-react-native';
 import { useLanguage } from '../context/LanguageContext';
 import { useCustomAlert } from '../../components/CustomAlert';
+import { A6 } from '../../lib/theme';
+import { AuroraBackdrop, Glass, LogoMark } from '../../components/ui/A6';
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1));
 const YEARS = Array.from({ length: 80 }, (_, i) => String(new Date().getFullYear() - i));
 const GENDER_OPTIONS = ['Male', 'Female', 'Prefer not to say', 'Others'];
@@ -17,68 +31,139 @@ const DIETARY_OPTIONS = ['None', 'Vegan', 'Vegetarian', 'Keto', 'Gluten-Free', '
 const ALLERGY_OPTIONS = ['No Allergies', 'Peanuts', 'Tree Nuts', 'Milk/Dairy', 'Eggs', 'Wheat/Gluten', 'Soy', 'Fish', 'Shellfish', 'Sesame', 'Other'];
 const ETHNICITY_OPTIONS = ['American', 'Pakistani', 'Indian', 'Mexican', 'Italian', 'Japanese', 'Chinese', 'Mediterranean', 'Middle Eastern', 'African', 'Caribbean', 'French', 'Brazilian', 'Other'];
 
-type DropdownProps = {
-  label: string;
+function FieldLabel({ children }: { children: string }) {
+  return (
+    <Text
+      style={{
+        fontSize: 11,
+        color: A6.fg2,
+        fontWeight: '600',
+        marginBottom: 6,
+        marginLeft: 2,
+      }}>
+      {children}
+    </Text>
+  );
+}
+
+function GlassInput(props: any) {
+  return (
+    <Glass style={{ marginBottom: 0, borderRadius: 14 }} radius={14}>
+      <TextInput
+        {...props}
+        placeholderTextColor={A6.fg3}
+        style={{
+          paddingHorizontal: 14,
+          paddingVertical: 14,
+          fontSize: 14,
+          color: A6.fg1,
+        }}
+      />
+    </Glass>
+  );
+}
+
+function GlassDropdown({
+  value,
+  options,
+  onSelect,
+  placeholder,
+  title,
+}: {
   value: string;
   options: string[];
-  onSelect: (val: string) => void;
+  onSelect: (v: string) => void;
   placeholder?: string;
-  isDark: boolean;
-  compact?: boolean;
-};
-
-function Dropdown({ label, value, options, onSelect, placeholder, isDark, compact }: DropdownProps) {
+  title?: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
-    <View style={{ flex: compact ? 1 : undefined }}>
-      {label ? <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 6, fontWeight: '700', fontSize: 14 }}>{label}</Text> : null}
-      <TouchableOpacity
-        onPress={() => setOpen(true)}
-        style={{
-          backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-          padding: 14, borderRadius: 14,
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0',
-        }}
-      >
-        <Text style={{ color: value ? (isDark ? '#F8FAFC' : '#0F172A') : '#94A3B8', fontSize: 15 }}>
-          {value || placeholder || 'Select...'}
-        </Text>
-        <ChevronDown color="#94A3B8" size={18} />
+    <>
+      <TouchableOpacity onPress={() => setOpen(true)} activeOpacity={0.85}>
+        <Glass style={{ borderRadius: 14 }} radius={14}>
+          <View
+            style={{
+              paddingHorizontal: 14,
+              paddingVertical: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+            <Text style={{ color: value ? A6.fg1 : A6.fg3, fontSize: 14 }}>
+              {value || placeholder || 'Select…'}
+            </Text>
+            <ChevronDown color={A6.fg3} size={14} strokeWidth={2} />
+          </View>
+        </Glass>
       </TouchableOpacity>
       <Modal visible={open} transparent animationType="fade">
-        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', padding: 32 }} activeOpacity={1} onPress={() => setOpen(false)}>
-          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, maxHeight: 380, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-              {label || 'Select'}
-            </Text>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => { onSelect(item); setOpen(false); }}
-                  style={{
-                    padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
-                    backgroundColor: item === value ? '#F1F5F9' : '#FFFFFF',
-                  }}
-                >
-                  <Text style={{ color: item === value ? '#6FAF4F' : '#64748B', fontSize: 15, fontWeight: item === value ? '800' : '500' }}>{item}</Text>
-                </TouchableOpacity>
-              )}
-            />
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setOpen(false)}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
+            padding: 32,
+          }}>
+          <View
+            style={{
+              borderRadius: 20,
+              maxHeight: 380,
+              overflow: 'hidden',
+              borderWidth: 0.5,
+              borderColor: 'rgba(255,255,255,0.12)',
+            }}>
+            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={{ backgroundColor: 'rgba(2,16,21,0.9)' }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: A6.fg1,
+                  padding: 16,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: 'rgba(255,255,255,0.08)',
+                }}>
+                {title || 'Select'}
+              </Text>
+              <FlatList
+                data={options}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
+                      onSelect(item);
+                      setOpen(false);
+                    }}
+                    style={{
+                      padding: 16,
+                      borderBottomWidth: 0.5,
+                      borderBottomColor: 'rgba(255,255,255,0.05)',
+                      backgroundColor: item === value ? `${A6.primary}1A` : 'transparent',
+                    }}>
+                    <Text
+                      style={{
+                        color: item === value ? A6.primaryLight : A6.fg1,
+                        fontSize: 15,
+                        fontWeight: item === value ? '800' : '500',
+                      }}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
           </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </>
   );
 }
 
 export default function OnboardingScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
   const { t } = useLanguage();
   const { alert } = useCustomAlert();
 
@@ -101,14 +186,12 @@ export default function OnboardingScreen() {
   const [customEthnicity, setCustomEthnicity] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const firstNameRef = useRef<TextInput>(null);
   const lastNameRef = useRef<TextInput>(null);
   const usernameRef = useRef<TextInput>(null);
   const heightRef = useRef<TextInput>(null);
   const weightRef = useRef<TextInput>(null);
   const goalWeightRef = useRef<TextInput>(null);
 
-  // Auto-fill from Auth Provider Metadata if available
   useEffect(() => {
     if (user?.user_metadata?.full_name) {
       const parts = user.user_metadata.full_name.split(' ');
@@ -119,8 +202,7 @@ export default function OnboardingScreen() {
 
   function calculateAge(): number {
     if (!birthMonth || !birthDay || !birthYear) return 0;
-    const monthIndex = MONTHS.indexOf(birthMonth);
-    const dob = new Date(parseInt(birthYear), monthIndex, parseInt(birthDay));
+    const dob = new Date(parseInt(birthYear), MONTHS.indexOf(birthMonth), parseInt(birthDay));
     const today = new Date();
     let age = today.getFullYear() - dob.getFullYear();
     const m = today.getMonth() - dob.getMonth();
@@ -130,10 +212,9 @@ export default function OnboardingScreen() {
 
   async function saveProfile() {
     if (!user) {
-      alert('Session Error', 'No active session found. Please ensure "Confirm Email" is disabled in your Supabase Auth settings, or log in again.');
+      alert('Session Error', 'No active session found. Please log in again.');
       return;
     }
-    
     const finalGender = gender === 'Others' ? customGender : gender;
     if (!firstName || !lastName || !username || !finalGender || !birthMonth || !birthDay || !birthYear) {
       alert('Missing Info', 'Please fill in all basic profile fields, including your first name, last name and username.');
@@ -141,23 +222,20 @@ export default function OnboardingScreen() {
     }
 
     setLoading(true);
-    
+
     const age = calculateAge();
     const w = parseFloat(currentWeight);
     const gw = parseFloat(goalWeight);
     const h = parseFloat(heightCm) / 100;
     const g = finalGender.toLowerCase().trim();
 
-    let bmi = null;
+    let bmi: number | null = null;
     let dailyGoal = 2000;
-
-    if (w > 0 && h > 0) {
-      bmi = parseFloat((w / (h * h)).toFixed(1));
-    }
+    if (w > 0 && h > 0) bmi = parseFloat((w / (h * h)).toFixed(1));
 
     if (w > 0 && h > 0 && age > 0) {
       let bmr = 10 * w + 6.25 * parseFloat(heightCm) - 5 * age;
-      bmr += (g === 'female' || g === 'f') ? -161 : 5;
+      bmr += g === 'female' || g === 'f' ? -161 : 5;
       let tdee = bmr * 1.2;
       if (gw > 0) {
         if (gw < w) tdee -= 500;
@@ -168,9 +246,17 @@ export default function OnboardingScreen() {
     }
 
     const finalDietary = dietaryPrefs === 'Other' ? customDietary : dietaryPrefs;
-    const finalAllergy = allergyOption === 'Other' ? customAllergy : (allergyOption === 'No Allergies' ? '' : allergyOption);
+    const finalAllergy =
+      allergyOption === 'Other'
+        ? customAllergy
+        : allergyOption === 'No Allergies'
+        ? ''
+        : allergyOption;
     const finalEthnicity = ethnicityOption === 'Other' ? customEthnicity : ethnicityOption;
-    const fullDietaryPrefs = (finalDietary || 'None') + (finalAllergy ? ` | Allergy: ${finalAllergy}` : '') + (finalEthnicity ? ` | Ethnicity: ${finalEthnicity}` : '');
+    const fullDietaryPrefs =
+      (finalDietary || 'None') +
+      (finalAllergy ? ` | Allergy: ${finalAllergy}` : '') +
+      (finalEthnicity ? ` | Ethnicity: ${finalEthnicity}` : '');
 
     const { error } = await supabase.from('users').upsert({
       id: user.id,
@@ -188,248 +274,286 @@ export default function OnboardingScreen() {
     });
 
     setLoading(false);
-
-    if (error) {
-      alert('Profile Error', error.message);
-      console.log('Upsert Error:', error);
-      router.replace('/(tabs)');
-    } else {
-      router.replace('/(tabs)');
-    }
+    if (error) alert('Profile Error', error.message);
+    router.replace('/(tabs)');
   }
 
   return (
-    <LinearGradient colors={isDark ? ['#09090B', '#1E293B'] : ['#F8FAFC', '#FFFFFF']} style={{ flex: 1 }}>
-      <KeyboardAvoidingView 
+    <View style={{ flex: 1, backgroundColor: A6.bgInk }}>
+      <AuroraBackdrop variant="sparse" />
+      <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
-      >
-        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 80 }}>
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}>
+        <ScrollView
+          contentContainerStyle={{ padding: 24, paddingTop: 80, paddingBottom: 60 }}
+          keyboardShouldPersistTaps="handled">
           {/* Header */}
-          <View style={{ marginBottom: 28, marginTop: 40, alignItems: 'center' }}>
-            <View style={{ 
-              width: 64, height: 64, borderRadius: 20, backgroundColor: '#6FAF4F',
-              alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-              shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 4
-            }}>
-              <Leaf color="#FFFFFF" size={32} />
-            </View>
-            <Text style={{ fontSize: 28, fontWeight: '900', color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 6 }}>
+          <View style={{ alignItems: 'center', marginBottom: 28 }}>
+            <LogoMark size={64} />
+            <Text
+              style={{
+                marginTop: 14,
+                fontSize: 26,
+                fontWeight: '600',
+                letterSpacing: -0.5,
+                color: A6.fg1,
+              }}>
               {t('onboardingWelcome')}
             </Text>
-            <Text style={{ fontSize: 15, color: '#64748B', textAlign: 'center' }}>
+            <Text
+              style={{
+                fontSize: 14,
+                color: A6.fg2,
+                marginTop: 6,
+                textAlign: 'center',
+              }}>
               {t('onboardingDesc')}
             </Text>
           </View>
 
-          {/* Name & Username */}
-          <View style={{ marginBottom: 18 }}>
-            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 6, fontWeight: '700', fontSize: 14 }}>First Name</Text>
-                <TextInput
-                  ref={firstNameRef}
-                  style={{
-                    backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 14, borderRadius: 14, fontSize: 15,
-                    color: isDark ? '#F8FAFC' : '#0F172A', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0',
-                  }}
-                  placeholder="e.g. John"
-                  placeholderTextColor="#94A3B8"
-                  value={firstName}
-                  onChangeText={setFirstName}
-                  onSubmitEditing={() => lastNameRef.current?.focus()}
-                  returnKeyType="next"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 6, fontWeight: '700', fontSize: 14 }}>Last Name</Text>
-                <TextInput
-                  ref={lastNameRef}
-                  style={{
-                    backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 14, borderRadius: 14, fontSize: 15,
-                    color: isDark ? '#F8FAFC' : '#0F172A', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0',
-                  }}
-                  placeholder="e.g. Doe"
-                  placeholderTextColor="#94A3B8"
-                  value={lastName}
-                  onChangeText={setLastName}
-                  onSubmitEditing={() => usernameRef.current?.focus()}
-                  returnKeyType="next"
-                />
-              </View>
+          {/* Name row */}
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+            <View style={{ flex: 1 }}>
+              <FieldLabel>First Name</FieldLabel>
+              <GlassInput
+                value={firstName}
+                onChangeText={setFirstName}
+                placeholder="e.g. John"
+                onSubmitEditing={() => lastNameRef.current?.focus()}
+                returnKeyType="next"
+              />
             </View>
-            <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 6, fontWeight: '700', fontSize: 14 }}>Username</Text>
-            <TextInput
+            <View style={{ flex: 1 }}>
+              <FieldLabel>Last Name</FieldLabel>
+              <GlassInput
+                ref={lastNameRef}
+                value={lastName}
+                onChangeText={setLastName}
+                placeholder="e.g. Doe"
+                onSubmitEditing={() => usernameRef.current?.focus()}
+                returnKeyType="next"
+              />
+            </View>
+          </View>
+
+          <View style={{ marginBottom: 12 }}>
+            <FieldLabel>Username</FieldLabel>
+            <GlassInput
               ref={usernameRef}
-              style={{
-                backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 14, borderRadius: 14, fontSize: 15,
-                color: isDark ? '#F8FAFC' : '#0F172A', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0',
-              }}
-              placeholder="@john"
-              placeholderTextColor="#94A3B8"
               value={username}
               onChangeText={setUsername}
+              placeholder="@john"
               autoCapitalize="none"
               onSubmitEditing={() => heightRef.current?.focus()}
               returnKeyType="next"
             />
           </View>
 
-          {/* Gender Dropdown */}
-          <View style={{ marginBottom: 18 }}>
-            <Dropdown label="Gender" value={gender} options={GENDER_OPTIONS} onSelect={setGender} placeholder="Select gender" isDark={isDark} />
+          <View style={{ marginBottom: 12 }}>
+            <FieldLabel>Gender</FieldLabel>
+            <GlassDropdown
+              value={gender}
+              options={GENDER_OPTIONS}
+              onSelect={setGender}
+              placeholder="Select gender"
+              title="Gender"
+            />
             {gender === 'Others' && (
-              <TextInput
-                style={{
-                  backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 14, borderRadius: 14, fontSize: 15,
-                  color: isDark ? '#F8FAFC' : '#0F172A', marginTop: 10, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0',
-                }}
-                placeholder="Enter your gender"
-                placeholderTextColor="#94A3B8"
-                value={customGender}
-                onChangeText={setCustomGender}
-              />
+              <View style={{ marginTop: 8 }}>
+                <GlassInput
+                  value={customGender}
+                  onChangeText={setCustomGender}
+                  placeholder="Enter your gender"
+                />
+              </View>
             )}
           </View>
 
-          {/* Date of Birth */}
-          <View style={{ marginBottom: 18 }}>
-            <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 6, fontWeight: '700', fontSize: 14 }}>Date of Birth</Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Dropdown label="" value={birthMonth} options={MONTHS} onSelect={setBirthMonth} placeholder="Month" isDark={isDark} compact />
-              <Dropdown label="" value={birthDay} options={DAYS} onSelect={setBirthDay} placeholder="Day" isDark={isDark} compact />
-              <Dropdown label="" value={birthYear} options={YEARS} onSelect={setBirthYear} placeholder="Year" isDark={isDark} compact />
+          <View style={{ marginBottom: 12 }}>
+            <FieldLabel>Date of Birth</FieldLabel>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <GlassDropdown
+                  value={birthMonth}
+                  options={MONTHS}
+                  onSelect={setBirthMonth}
+                  placeholder="Month"
+                  title="Month"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <GlassDropdown
+                  value={birthDay}
+                  options={DAYS}
+                  onSelect={setBirthDay}
+                  placeholder="Day"
+                  title="Day"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <GlassDropdown
+                  value={birthYear}
+                  options={YEARS}
+                  onSelect={setBirthYear}
+                  placeholder="Year"
+                  title="Year"
+                />
+              </View>
             </View>
             {birthMonth && birthDay && birthYear && (
-              <Text style={{ color: '#2FA4D7', fontSize: 13, fontWeight: '600', marginTop: 8 }}>
+              <Text
+                style={{
+                  color: A6.primaryLight,
+                  fontSize: 11,
+                  fontWeight: '600',
+                  marginTop: 6,
+                  marginLeft: 2,
+                }}>
                 Age: {calculateAge()} years old
               </Text>
             )}
           </View>
 
-          {/* Height */}
-          <View style={{ marginBottom: 18 }}>
-            <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 6, fontWeight: '700', fontSize: 14 }}>Height (cm)</Text>
-            <TextInput
+          <View style={{ marginBottom: 12 }}>
+            <FieldLabel>Height (cm)</FieldLabel>
+            <GlassInput
               ref={heightRef}
-              style={{
-                backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 14, borderRadius: 14, fontSize: 15,
-                color: isDark ? '#F8FAFC' : '#0F172A', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0',
-              }}
-              placeholder="e.g. 175"
-              placeholderTextColor="#94A3B8"
               value={heightCm}
               onChangeText={setHeightCm}
+              placeholder="e.g. 175"
               keyboardType="numeric"
               onSubmitEditing={() => weightRef.current?.focus()}
               returnKeyType="next"
             />
           </View>
 
-          {/* Current Weight */}
-          <View style={{ marginBottom: 18 }}>
-            <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 6, fontWeight: '700', fontSize: 14 }}>Current Weight (kg)</Text>
-            <TextInput
-              ref={weightRef}
-              style={{
-                backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 14, borderRadius: 14, fontSize: 15,
-                color: isDark ? '#F8FAFC' : '#0F172A', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0',
-              }}
-              placeholder="e.g. 70"
-              placeholderTextColor="#94A3B8"
-              value={currentWeight}
-              onChangeText={setCurrentWeight}
-              keyboardType="numeric"
-              onSubmitEditing={() => goalWeightRef.current?.focus()}
-              returnKeyType="next"
-            />
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+            <View style={{ flex: 1 }}>
+              <FieldLabel>Current Weight (kg)</FieldLabel>
+              <GlassInput
+                ref={weightRef}
+                value={currentWeight}
+                onChangeText={setCurrentWeight}
+                placeholder="e.g. 70"
+                keyboardType="numeric"
+                onSubmitEditing={() => goalWeightRef.current?.focus()}
+                returnKeyType="next"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <FieldLabel>Goal Weight (kg)</FieldLabel>
+              <GlassInput
+                ref={goalWeightRef}
+                value={goalWeight}
+                onChangeText={setGoalWeight}
+                placeholder="e.g. 65"
+                keyboardType="numeric"
+                returnKeyType="done"
+              />
+            </View>
           </View>
 
-          {/* Goal Weight */}
-          <View style={{ marginBottom: 18 }}>
-            <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 6, fontWeight: '700', fontSize: 14 }}>Goal Weight (kg)</Text>
-            <TextInput
-              ref={goalWeightRef}
-              style={{
-                backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 14, borderRadius: 14, fontSize: 15,
-                color: isDark ? '#F8FAFC' : '#0F172A', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0',
-              }}
-              placeholder="e.g. 65"
-              placeholderTextColor="#94A3B8"
-              value={goalWeight}
-              onChangeText={setGoalWeight}
-              keyboardType="numeric"
-              returnKeyType="done"
+          <View style={{ marginBottom: 12 }}>
+            <FieldLabel>Dietary Preference</FieldLabel>
+            <GlassDropdown
+              value={dietaryPrefs}
+              options={DIETARY_OPTIONS}
+              onSelect={setDietaryPrefs}
+              title="Dietary Preference"
             />
-          </View>
-
-          {/* Dietary Preferences */}
-          <View style={{ marginBottom: 18 }}>
-            <Dropdown label="Dietary Preference" value={dietaryPrefs} options={DIETARY_OPTIONS} onSelect={setDietaryPrefs} isDark={isDark} />
             {dietaryPrefs === 'Other' && (
-              <TextInput
-                style={{
-                  backgroundColor: '#FFFFFF', padding: 14, borderRadius: 14, fontSize: 15,
-                  color: '#0F172A', marginTop: 10, borderWidth: 1, borderColor: '#E2E8F0',
-                }}
-                placeholder="Enter your dietary preference"
-                placeholderTextColor="#94A3B8"
-                value={customDietary}
-                onChangeText={setCustomDietary}
-              />
+              <View style={{ marginTop: 8 }}>
+                <GlassInput
+                  value={customDietary}
+                  onChangeText={setCustomDietary}
+                  placeholder="Enter your dietary preference"
+                />
+              </View>
             )}
           </View>
 
-          {/* Allergies */}
-          <View style={{ marginBottom: 18 }}>
-            <Dropdown label="Any Allergies?" value={allergyOption} options={ALLERGY_OPTIONS} onSelect={setAllergyOption} isDark={isDark} />
+          <View style={{ marginBottom: 12 }}>
+            <FieldLabel>Any Allergies?</FieldLabel>
+            <GlassDropdown
+              value={allergyOption}
+              options={ALLERGY_OPTIONS}
+              onSelect={setAllergyOption}
+              title="Allergies"
+            />
             {allergyOption === 'Other' && (
-              <TextInput
-                style={{
-                  backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 14, borderRadius: 14, fontSize: 15,
-                  color: isDark ? '#F8FAFC' : '#0F172A', marginTop: 10, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0',
-                }}
-                placeholder="Type your allergy (e.g. Mustard)"
-                placeholderTextColor="#94A3B8"
-                value={customAllergy}
-                onChangeText={setCustomAllergy}
-              />
+              <View style={{ marginTop: 8 }}>
+                <GlassInput
+                  value={customAllergy}
+                  onChangeText={setCustomAllergy}
+                  placeholder="Type your allergy (e.g. Mustard)"
+                />
+              </View>
             )}
           </View>
 
-          {/* Ethnicity */}
           <View style={{ marginBottom: 18 }}>
-            <Dropdown label="Ethnicity / Cuisine Pref." value={ethnicityOption} options={ETHNICITY_OPTIONS} onSelect={setEthnicityOption} isDark={isDark} />
+            <FieldLabel>Ethnicity / Cuisine Pref.</FieldLabel>
+            <GlassDropdown
+              value={ethnicityOption}
+              options={ETHNICITY_OPTIONS}
+              onSelect={setEthnicityOption}
+              title="Ethnicity"
+            />
             {ethnicityOption === 'Other' && (
-              <TextInput
-                style={{
-                  backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 14, borderRadius: 14, fontSize: 15,
-                  color: isDark ? '#F8FAFC' : '#0F172A', marginTop: 10, borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0',
-                }}
-                placeholder="Enter preferred cuisine (e.g. Thai)"
-                placeholderTextColor="#94A3B8"
-                value={customEthnicity}
-                onChangeText={setCustomEthnicity}
-              />
+              <View style={{ marginTop: 8 }}>
+                <GlassInput
+                  value={customEthnicity}
+                  onChangeText={setCustomEthnicity}
+                  placeholder="Enter preferred cuisine (e.g. Thai)"
+                />
+              </View>
             )}
           </View>
 
-          {/* Save Button */}
           <TouchableOpacity
-            style={{
-              backgroundColor: '#6FAF4F', padding: 16, borderRadius: 16, marginTop: 12,
-              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-              shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6,
-            }}
+            activeOpacity={0.85}
             onPress={saveProfile}
             disabled={loading}
-          >
-            {loading && <ActivityIndicator color="#FFFFFF" style={{ marginRight: 8 }} />}
-            <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '800' }}>{t('onboardingFinish')}</Text>
+            style={{
+              borderRadius: 16,
+              overflow: 'hidden',
+              ...Platform.select({
+                ios: {
+                  shadowColor: A6.primary,
+                  shadowOffset: { width: 0, height: 12 },
+                  shadowOpacity: 0.5,
+                  shadowRadius: 22,
+                },
+                android: { elevation: 10 },
+              }),
+            }}>
+            <LinearGradient
+              colors={[A6.primary, A6.primaryLight]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                paddingHorizontal: 18,
+                paddingVertical: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}>
+              {loading && <ActivityIndicator color={A6.bgInk} />}
+              <Text
+                style={{
+                  color: A6.bgInk,
+                  fontSize: 16,
+                  fontWeight: '800',
+                  letterSpacing: 0.2,
+                }}>
+                {t('onboardingFinish')}
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }

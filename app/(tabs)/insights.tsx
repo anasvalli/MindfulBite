@@ -1,19 +1,17 @@
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { Activity, LogOut, TrendingUp, AlertTriangle, Trash2 } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
+import { LogOut, Trash2, Sparkles } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { useCustomAlert } from '../../components/CustomAlert';
-import { useAppTheme } from '../context/ThemeContext';
+import { A6 } from '../../lib/theme';
+import { Page, Glass, PageHeader, PillButton } from '../../components/ui/A6';
 
 export default function InsightsScreen() {
-  const { signOut, user } = useAuth();
+  const { signOut } = useAuth();
   const { t } = useLanguage();
-  const { resolvedScheme } = useAppTheme();
-  const isDark = resolvedScheme === 'dark';
   const router = useRouter();
   const { alert } = useCustomAlert();
 
@@ -23,82 +21,113 @@ export default function InsightsScreen() {
       'Are you absolutely sure? This will permanently delete your profile, meal logs, and account. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete Forever', 
+        {
+          text: 'Delete Forever',
           style: 'destructive',
           onPress: async () => {
             try {
-              // 1. Call RPC to delete auth user and data
               const { error } = await supabase.rpc('delete_user_account');
-              
               if (error) {
-                console.error('Delete Error:', error);
                 alert('Error', 'Failed to delete account. Please try again.');
                 return;
               }
-
-              // 2. Sign out to clear local session
               await signOut();
-            } catch (err) {
+            } catch {
               alert('Error', 'Failed to delete account.');
             }
-          }
+          },
         },
       ]
     );
   };
-  
-  return (
-    <LinearGradient colors={isDark ? ['#09090B', '#1E293B'] : ['#F8FAFC', '#FFFFFF']} style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, marginTop: 10 }}>
-          <View>
-            <Text style={{ fontSize: 24, fontWeight: '800', color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 4 }}>Weekly Insights</Text>
-            <Text style={{ fontSize: 14, color: isDark ? '#94A3B8' : '#64748B' }}>Discover your eating patterns.</Text>
-          </View>
-          <TouchableOpacity onPress={() => router.push('/paywall')} style={{ backgroundColor: '#6FAF4F', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}>
-            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13, textTransform: 'uppercase' }}>Upgrade</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Pro features teaser */}
-        <View style={{
-          backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 24, borderRadius: 24, marginTop: 8, overflow: 'hidden',
-          shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.2 : 0.04, shadowRadius: 8, elevation: 2
-        }}>
-          <Text style={{ color: isDark ? '#F8FAFC' : '#0F172A', fontWeight: '800', fontSize: 18, marginBottom: 8 }}>MindfulBite Pro ✨</Text>
-          <Text style={{ color: isDark ? '#94A3B8' : '#64748B', marginBottom: 16, lineHeight: 20, fontSize: 14 }}>
+  return (
+    <Page>
+      <PageHeader
+        title="Weekly Insights"
+        subtitle="Discover your eating patterns"
+        right={<PillButton onPress={() => router.push('/paywall')}>Upgrade</PillButton>}
+      />
+
+      <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+        {/* Pro teaser */}
+        <Glass style={{ padding: 20, marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', letterSpacing: -0.3, color: A6.fg1 }}>
+              MindfulBite Pro
+            </Text>
+            <Sparkles size={16} color={A6.primaryLight} fill={A6.primaryLight} />
+          </View>
+          <Text style={{ fontSize: 13, color: A6.fg2, lineHeight: 19, marginBottom: 14 }}>
             Unlock advanced mood-calorie correlation charts and unlimited predictive nudges.
           </Text>
-          <TouchableOpacity style={{ backgroundColor: '#6FAF4F', paddingVertical: 14, borderRadius: 16, alignItems: 'center', shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 4 }}>
-            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 15 }}>Upgrade for $7.99/mo</Text>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push('/paywall')}
+            style={{
+              borderRadius: 14,
+              overflow: 'hidden',
+              ...Platform.select({
+                ios: {
+                  shadowColor: A6.primary,
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.45,
+                  shadowRadius: 18,
+                },
+                android: { elevation: 6 },
+              }),
+            }}>
+            <LinearGradient
+              colors={[A6.primary, A6.primaryLight]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ paddingVertical: 14, alignItems: 'center' }}>
+              <Text style={{ color: A6.bgInk, fontWeight: '800', fontSize: 14 }}>
+                Upgrade for $5.99/mo
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
+        </Glass>
 
-        {/* Sign Out Button */}
-        <TouchableOpacity 
-          style={{
-            marginTop: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            padding: 16, backgroundColor: '#FEF2F2',
-            borderWidth: 1, borderColor: '#FCA5A5', borderRadius: 18,
-          }}
+        {/* Sign out */}
+        <TouchableOpacity
+          activeOpacity={0.85}
           onPress={signOut}
-        >
-          <LogOut color="#EF4444" size={20} />
-          <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 16, marginLeft: 8 }}>{t('signOut')}</Text>
+          style={{
+            marginTop: 16,
+            padding: 16,
+            borderRadius: 16,
+            backgroundColor: `${A6.danger}0a`,
+            borderWidth: 0.5,
+            borderColor: `${A6.danger}33`,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}>
+          <LogOut color={A6.danger} size={18} strokeWidth={1.8} />
+          <Text style={{ color: A6.danger, fontWeight: '700', fontSize: 14 }}>
+            {t('signOut')}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={{
-            marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            padding: 16,
-          }}
+        <TouchableOpacity
+          activeOpacity={0.7}
           onPress={handleDeleteAccount}
-        >
-          <Trash2 color="#94A3B8" size={18} />
-          <Text style={{ color: '#94A3B8', fontWeight: '600', fontSize: 14, marginLeft: 8 }}>{t('deleteAccount')}</Text>
+          style={{
+            marginTop: 12,
+            padding: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}>
+          <Trash2 color={A6.fg3} size={16} strokeWidth={1.8} />
+          <Text style={{ color: A6.fg2, fontWeight: '600', fontSize: 13 }}>
+            {t('deleteAccount')}
+          </Text>
         </TouchableOpacity>
-      </ScrollView>
-    </LinearGradient>
+      </View>
+    </Page>
   );
 }

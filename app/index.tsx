@@ -1,11 +1,16 @@
 import { View, ActivityIndicator } from 'react-native';
+import { A6 } from '../lib/theme';
 
 export default function Index() {
-  // This index serves strictly as a mounting point for deep-links mapping to `/`.
-  // AuthContext handles all actual routing, so we render a loader temporarily.
   return (
-    <View style={{ flex: 1, backgroundColor: '#09090B', justifyContent: 'center', alignItems: 'center' }}>
-      <ActivityIndicator size="large" color="#6FAF4F" />
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: A6.bgInk,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+      <ActivityIndicator size="large" color={A6.primaryLight} />
     </View>
   );
 }

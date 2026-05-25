@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Modal, FlatList, useColorScheme, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  ScrollView,
+  Modal,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { supabase } from '../../lib/supabase';
@@ -7,10 +19,12 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { makeRedirectUri } from 'expo-auth-session';
-import { ChevronDown, Globe, Leaf, Eye, EyeOff, Facebook } from 'lucide-react-native';
+import { ChevronDown, Globe, Eye, EyeOff, Facebook, Mail, Lock } from 'lucide-react-native';
 import { useLanguage } from '../context/LanguageContext';
 import { useCustomAlert } from '../../components/CustomAlert';
 import { getCountryNames, getCitiesForCountry } from '../../lib/countries';
+import { A6 } from '../../lib/theme';
+import { AuroraBackdrop, Glass, LogoMark } from '../../components/ui/A6';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -41,10 +55,39 @@ const LANGUAGES = [
   { code: 'fil', name: 'Filipino' },
 ];
 
-export default function LoginScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+const InputField = ({
+  Icon,
+  placeholder,
+  value,
+  onChange,
+  secure,
+  right,
+  ...rest
+}: any) => (
+  <Glass style={{ padding: 0, marginBottom: 10, borderRadius: 16 }} radius={16}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 4 }}>
+      <Icon size={18} color={A6.fg2} strokeWidth={1.7} />
+      <TextInput
+        style={{
+          flex: 1,
+          color: A6.fg1,
+          fontSize: 15,
+          paddingHorizontal: 10,
+          paddingVertical: 14,
+        }}
+        placeholder={placeholder}
+        placeholderTextColor={A6.fg3}
+        value={value}
+        onChangeText={onChange}
+        secureTextEntry={secure}
+        {...rest}
+      />
+      {right}
+    </View>
+  </Glass>
+);
 
+export default function LoginScreen() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,52 +111,40 @@ export default function LoginScreen() {
       alert('Error', 'Please enter your email and password.');
       return;
     }
-
     if (!isLogin && password !== confirmPassword) {
       alert('Error', 'Passwords do not match.');
       return;
     }
-
     setLoading(true);
 
     if (isLogin) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
       if (error) {
         alert('Sign In Error', error.message);
         setLoading(false);
         return;
       }
-
       const { data: profile } = await supabase
         .from('users')
         .select('age, gender')
         .eq('id', data.user.id)
         .single();
-        
       setLoading(false);
-
-      if (!profile || !profile.age || !profile.gender) {
-        router.replace('/(auth)/onboarding');
-      } else {
-        router.replace('/(tabs)');
-      }
+      if (!profile || !profile.age || !profile.gender) router.replace('/(auth)/onboarding');
+      else router.replace('/(tabs)');
     } else {
       const { data, error } = await supabase.auth.signUp({ email, password });
-
       setLoading(false);
-
       if (error) {
         alert('Sign Up Error', error.message);
       } else {
         if (!data.session) {
           alert(
             'Supabase Dashboard Action Required',
-            'To instantly sign in without email confirmation, you must turn OFF "Confirm email" in your Supabase Authentication settings.',
+            'To instantly sign in without email confirmation, you must turn OFF "Confirm email" in your Supabase Authentication settings.'
           );
           return;
         }
-        // Save country & city right after account creation
         if (data.user && (country.trim() || city.trim())) {
           await supabase.from('users').upsert({
             id: data.user.id,
@@ -126,94 +157,31 @@ export default function LoginScreen() {
     }
   }
 
-  async function handleGoogleAuth() {
+  async function handleOAuth(provider: 'google' | 'facebook') {
     setLoading(true);
     try {
       const redirectUrl = makeRedirectUri({ scheme: 'mindfulbite' });
-      
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider,
         options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
       });
-
       if (error) throw error;
-
       if (data?.url) {
         const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        
         if (res.type === 'success') {
           const { url } = res;
-
-          // Parse tokens from BOTH hash fragments (#) and query params (?)
-          // Supabase can return tokens in either location depending on the flow
           const extractParams = (raw: string): Record<string, string> => {
             const result: Record<string, string> = {};
             if (!raw) return result;
-            raw.split('&').forEach(pair => {
+            raw.split('&').forEach((pair) => {
               const [key, ...rest] = pair.split('=');
               if (key) result[key] = decodeURIComponent(rest.join('='));
             });
             return result;
           };
-
-          const hashPart = url.split('#')[1] || '';
-          const queryPart = (url.split('?')[1] || '').split('#')[0];
-
-          const params = { ...extractParams(queryPart), ...extractParams(hashPart) };
-
-          if (params.access_token && params.refresh_token) {
-            await supabase.auth.setSession({
-              access_token: params.access_token,
-              refresh_token: params.refresh_token,
-            });
-          } else {
-            // Browser returned but no tokens found — likely a redirect URI mismatch
-            alert(
-              'Sign-In Incomplete',
-              'Google returned without authentication tokens. Please ensure the correct Redirect URI is configured in your Supabase Dashboard under Authentication > Providers > Google.'
-            );
-          }
-        }
-      }
-    } catch (error: any) {
-      alert('Google Sign-In Error', error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleFacebookAuth() {
-    setLoading(true);
-    try {
-      const redirectUrl = makeRedirectUri({ scheme: 'mindfulbite' });
-      
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'facebook',
-        options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
-      });
-
-      if (error) throw error;
-
-      if (data?.url) {
-        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        
-        if (res.type === 'success') {
-          const { url } = res;
-
-          const extractParams = (raw: string): Record<string, string> => {
-            const result: Record<string, string> = {};
-            if (!raw) return result;
-            raw.split('&').forEach(pair => {
-              const [key, ...rest] = pair.split('=');
-              if (key) result[key] = decodeURIComponent(rest.join('='));
-            });
-            return result;
-          };
-
           const hashPart = url.split('#')[1] || '';
           const queryPart = (url.split('?')[1] || '').split('#')[0];
           const params = { ...extractParams(queryPart), ...extractParams(hashPart) };
-
           if (params.access_token && params.refresh_token) {
             await supabase.auth.setSession({
               access_token: params.access_token,
@@ -222,13 +190,13 @@ export default function LoginScreen() {
           } else {
             alert(
               'Sign-In Incomplete',
-              'Facebook returned without authentication tokens. Please ensure the correct Redirect URI is configured in your Supabase Dashboard under Authentication > Providers > Facebook.'
+              `${provider} returned without authentication tokens. Please ensure the correct Redirect URI is configured in your Supabase Dashboard.`
             );
           }
         }
       }
-    } catch (error: any) {
-      alert('Facebook Sign-In Error', error.message);
+    } catch (e: any) {
+      alert('Sign-In Error', e.message);
     } finally {
       setLoading(false);
     }
@@ -244,276 +212,453 @@ export default function LoginScreen() {
       redirectTo: Linking.createURL('/'),
     });
     setLoading(false);
-    if (error) {
-      alert('Error', error.message);
-    } else {
-      alert('Success', t('resetInstructionsSent'));
-    }
+    if (error) alert('Error', error.message);
+    else alert('Success', t('resetInstructionsSent'));
   }
 
+  const Dropdown = ({ value, placeholder, onPress, disabled }: any) => (
+    <TouchableOpacity
+      onPress={onPress}
+      disabled={disabled}
+      style={{
+        marginBottom: 10,
+        opacity: disabled ? 0.6 : 1,
+      }}>
+      <Glass style={{ borderRadius: 16 }} radius={16}>
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+          <Text style={{ color: value ? A6.fg1 : A6.fg3, fontSize: 15 }}>
+            {value || placeholder}
+          </Text>
+          <ChevronDown color={A6.fg3} size={18} />
+        </View>
+      </Glass>
+    </TouchableOpacity>
+  );
+
   return (
-    <LinearGradient colors={['#F8FAFC', '#FFFFFF']} style={{ flex: 1 }}>
-      <KeyboardAvoidingView 
+    <View style={{ flex: 1, backgroundColor: A6.bgInk }}>
+      <AuroraBackdrop variant="sparse" />
+      <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}>
-          
-          {/* Language Selector */}
-          <View
-            style={{
-              position: 'absolute', top: 50, right: 24,
-              backgroundColor: '#FFFFFF', borderRadius: 12,
-              borderWidth: 1, borderColor: '#E2E8F0',
-              shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
-            }}
-          >
-            <TouchableOpacity onPress={() => setLangModalOpen(true)}
-              style={{ paddingHorizontal: 14, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' }}
-            >
-              <Globe color="#64748B" size={16} />
-              <Text style={{ color: '#0F172A', fontSize: 13, fontWeight: '600', marginLeft: 6 }}>{language}</Text>
-              <ChevronDown color="#64748B" size={14} style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 28, paddingTop: 110 }}
+          keyboardShouldPersistTaps="handled">
+          {/* Language pill */}
+          <View style={{ position: 'absolute', top: 60, right: 22, zIndex: 20 }}>
+            <Glass style={{ borderRadius: 14 }} radius={14}>
+              <TouchableOpacity
+                onPress={() => setLangModalOpen(true)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}>
+                <Globe size={14} color={A6.fg2} strokeWidth={1.7} />
+                <Text style={{ color: A6.fg1, fontSize: 12, fontWeight: '600' }}>{language}</Text>
+                <ChevronDown color={A6.fg2} size={11} strokeWidth={2.5} />
+              </TouchableOpacity>
+            </Glass>
           </View>
 
-          <Modal visible={langModalOpen} transparent animationType="fade">
-            <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', padding: 32 }} activeOpacity={1} onPress={() => setLangModalOpen(false)}>
-              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, maxHeight: 400, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20 }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                  {t('selectLanguage')}
-                </Text>
-                <FlatList
-                  data={LANGUAGES}
-                  keyExtractor={(item) => item.code}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      onPress={() => { setLanguage(item.name); setLangModalOpen(false); }}
-                      style={{
-                        padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
-                        backgroundColor: item.name === language ? '#F1F5F9' : '#FFFFFF',
-                      }}
-                    >
-                      <Text style={{ color: item.name === language ? '#6FAF4F' : '#64748B', fontSize: 15, fontWeight: item.name === language ? '800' : '500' }}>
-                        {item.name}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                />
-              </View>
-            </TouchableOpacity>
-          </Modal>
-
-          {/* Logo & Branding */}
-          <View style={{ alignItems: 'center', marginBottom: 36 }}>
-            <View style={{ 
-              width: 72, height: 72, borderRadius: 22, backgroundColor: '#6FAF4F',
-              alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-              shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 4
-            }}>
-              <Leaf color="#FFFFFF" size={36} />
-            </View>
-            <Text style={{ fontSize: 34, fontWeight: '900', color: '#0F172A', marginBottom: 6 }}>MindfulBite</Text>
-            <Text style={{ fontSize: 15, color: '#64748B', textAlign: 'center' }}>
+          {/* Logo + brand */}
+          <View style={{ alignItems: 'center', marginBottom: 40 }}>
+            <LogoMark size={76} />
+            <Text
+              style={{
+                marginTop: 18,
+                fontSize: 32,
+                fontWeight: '600',
+                letterSpacing: -1,
+                color: A6.primaryLight,
+              }}>
+              MindfulBite
+            </Text>
+            <Text style={{ fontSize: 14, color: A6.fg2, marginTop: 6, textAlign: 'center' }}>
               {t('yourAICoach')}
             </Text>
           </View>
 
-          {/* Email Input */}
-          <TextInput
-            style={{
-              backgroundColor: '#FFFFFF', padding: 16, borderRadius: 14, fontSize: 15,
-              color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 12,
-            }}
+          <InputField
+            Icon={Mail}
             placeholder={t('emailAddress')}
-            placeholderTextColor="#94A3B8"
             value={email}
-            onChangeText={setEmail}
+            onChange={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
           />
 
-          {/* Password Input */}
-          <View style={{ marginBottom: 12, position: 'relative', justifyContent: 'center' }}>
-            <TextInput
-              style={{
-                backgroundColor: '#FFFFFF', padding: 16, paddingRight: 50, borderRadius: 14, fontSize: 15,
-                color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0',
-              }}
-              placeholder={t('password')}
-              placeholderTextColor="#94A3B8"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity 
-              style={{ position: 'absolute', right: 16 }}
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? <EyeOff color="#6FAF4F" size={20} /> : <Eye color="#94A3B8" size={20} />}
-            </TouchableOpacity>
-          </View>
-
-          {/* Forgot Password Link */}
-          {isLogin && (
-            <TouchableOpacity onPress={handleResetPassword} style={{ alignSelf: 'flex-end', marginBottom: 16 }}>
-              <Text style={{ color: '#2FA4D7', fontSize: 13, fontWeight: '600' }}>{t('forgotPassword')}</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Confirm Password */}
-          {!isLogin && (
-            <View style={{ marginBottom: 12, position: 'relative', justifyContent: 'center' }}>
-              <TextInput
-                style={{
-                  backgroundColor: '#FFFFFF', padding: 16, paddingRight: 50, borderRadius: 14, fontSize: 15,
-                  color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0',
-                }}
-                placeholder={t('confirmPassword')}
-                placeholderTextColor="#94A3B8"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showConfirmPassword}
-              />
-              <TouchableOpacity 
-                style={{ position: 'absolute', right: 16 }}
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-              >
-                {showConfirmPassword ? <EyeOff color="#6FAF4F" size={20} /> : <Eye color="#94A3B8" size={20} />}
+          <InputField
+            Icon={Lock}
+            placeholder={t('password')}
+            value={password}
+            onChange={setPassword}
+            secure={!showPassword}
+            right={
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
+                {showPassword ? (
+                  <EyeOff color={A6.primaryLight} size={18} strokeWidth={1.7} />
+                ) : (
+                  <Eye color={A6.fg2} size={18} strokeWidth={1.7} />
+                )}
               </TouchableOpacity>
-            </View>
+            }
+          />
+
+          {isLogin && (
+            <TouchableOpacity
+              onPress={handleResetPassword}
+              style={{ alignSelf: 'flex-end', marginBottom: 18 }}>
+              <Text style={{ color: A6.primaryLight, fontSize: 12, fontWeight: '600' }}>
+                {t('forgotPassword')}
+              </Text>
+            </TouchableOpacity>
           )}
 
-          {/* Country & City dropdowns — shown on Signup only */}
           {!isLogin && (
             <>
-              {/* Country Dropdown */}
-              <TouchableOpacity
+              <InputField
+                Icon={Lock}
+                placeholder={t('confirmPassword')}
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                secure={!showConfirmPassword}
+                right={
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={{ padding: 4 }}>
+                    {showConfirmPassword ? (
+                      <EyeOff color={A6.primaryLight} size={18} strokeWidth={1.7} />
+                    ) : (
+                      <Eye color={A6.fg2} size={18} strokeWidth={1.7} />
+                    )}
+                  </TouchableOpacity>
+                }
+              />
+              <Dropdown
+                value={country}
+                placeholder="Select Country"
                 onPress={() => setCountryModalOpen(true)}
-                style={{ backgroundColor: '#FFFFFF', padding: 16, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}
-              >
-                <Text style={{ color: country ? '#0F172A' : '#94A3B8', fontSize: 15 }}>{country || 'Select Country'}</Text>
-                <ChevronDown color="#94A3B8" size={18} />
-              </TouchableOpacity>
-
-              {/* City Dropdown */}
-              <TouchableOpacity
-                onPress={() => { if (!country) { alert('Select Country', 'Please select a country first.'); return; } setCityModalOpen(true); }}
-                style={{ backgroundColor: country ? '#FFFFFF' : '#F8FAFC', padding: 16, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}
-              >
-                <Text style={{ color: city ? '#0F172A' : '#94A3B8', fontSize: 15 }}>{city || (country ? 'Select City' : 'Select Country first')}</Text>
-                <ChevronDown color="#94A3B8" size={18} />
-              </TouchableOpacity>
-
-              {/* Country Modal */}
-              <Modal visible={countryModalOpen} transparent animationType="fade">
-                <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }} activeOpacity={1} onPress={() => setCountryModalOpen(false)}>
-                  <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, maxHeight: 450, overflow: 'hidden' }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>Select Country</Text>
-                    <FlatList
-                      data={countryList}
-                      keyExtractor={(item) => item}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          onPress={() => { setCountry(item); setCity(''); setCountryModalOpen(false); }}
-                          style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', backgroundColor: item === country ? '#F1F5F9' : '#FFFFFF' }}
-                        >
-                          <Text style={{ color: item === country ? '#6FAF4F' : '#0F172A', fontSize: 15, fontWeight: item === country ? '800' : '500' }}>{item}</Text>
-                        </TouchableOpacity>
-                      )}
-                    />
-                  </View>
-                </TouchableOpacity>
-              </Modal>
-
-              {/* City Modal */}
-              <Modal visible={cityModalOpen} transparent animationType="fade">
-                <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }} activeOpacity={1} onPress={() => setCityModalOpen(false)}>
-                  <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, maxHeight: 450, overflow: 'hidden' }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>Select City — {country}</Text>
-                    <FlatList
-                      data={cityList}
-                      keyExtractor={(item) => item}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          onPress={() => { setCity(item); setCityModalOpen(false); }}
-                          style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', backgroundColor: item === city ? '#F1F5F9' : '#FFFFFF' }}
-                        >
-                          <Text style={{ color: item === city ? '#6FAF4F' : '#0F172A', fontSize: 15, fontWeight: item === city ? '800' : '500' }}>{item}</Text>
-                        </TouchableOpacity>
-                      )}
-                    />
-                  </View>
-                </TouchableOpacity>
-              </Modal>
+              />
+              <Dropdown
+                value={city}
+                placeholder={country ? 'Select City' : 'Select Country first'}
+                onPress={() => {
+                  if (!country) {
+                    alert('Select Country', 'Please select a country first.');
+                    return;
+                  }
+                  setCityModalOpen(true);
+                }}
+                disabled={!country}
+              />
             </>
           )}
 
-          {/* Login / Sign Up Button */}
+          {/* Sign In/Up CTA */}
           <TouchableOpacity
-            style={{
-              backgroundColor: '#6FAF4F', padding: 16, borderRadius: 16, marginTop: 8,
-              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-              shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
-            }}
+            activeOpacity={0.85}
             onPress={handleAuth}
             disabled={loading}
-          >
-            {loading && <ActivityIndicator color="#FFFFFF" style={{ marginRight: 8 }} />}
-            <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '800' }}>
-              {isLogin ? t('signInBtn') : t('signUpBtn')}
-            </Text>
+            style={{
+              marginTop: 8,
+              borderRadius: 16,
+              overflow: 'hidden',
+              ...Platform.select({
+                ios: {
+                  shadowColor: A6.primary,
+                  shadowOffset: { width: 0, height: 12 },
+                  shadowOpacity: 0.5,
+                  shadowRadius: 22,
+                },
+                android: { elevation: 10 },
+              }),
+            }}>
+            <LinearGradient
+              colors={[A6.primary, A6.primaryLight]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                paddingHorizontal: 18,
+                paddingVertical: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+              }}>
+              {loading && <ActivityIndicator color={A6.bgInk} />}
+              <Text
+                style={{
+                  color: A6.bgInk,
+                  fontSize: 16,
+                  fontWeight: '800',
+                  letterSpacing: 0.2,
+                }}>
+                {isLogin ? t('signInBtn') : t('signUpBtn')}
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
 
-          {/* Toggle Login / Signup */}
+          {/* Toggle */}
           <TouchableOpacity
-            style={{ marginTop: 18, alignItems: 'center' }}
-            onPress={() => { setIsLogin(!isLogin); setPassword(''); setConfirmPassword(''); }}
-            disabled={loading}
-          >
-            <Text style={{ color: '#64748B', fontSize: 14, fontWeight: '600' }}>
-              {isLogin ? t('noAccountLabel') : t('haveAccountLabel')} <Text style={{ color: '#2FA4D7', fontWeight: '700' }}>{isLogin ? 'Sign Up' : 'Log In'}</Text>
+            style={{ marginTop: 16, alignItems: 'center' }}
+            onPress={() => {
+              setIsLogin(!isLogin);
+              setPassword('');
+              setConfirmPassword('');
+            }}
+            disabled={loading}>
+            <Text style={{ color: A6.fg2, fontSize: 13 }}>
+              {isLogin ? t('noAccountLabel') : t('haveAccountLabel')}{' '}
+              <Text style={{ color: A6.primaryLight, fontWeight: '700' }}>
+                {isLogin ? 'Sign Up' : 'Log In'}
+              </Text>
             </Text>
           </TouchableOpacity>
 
           {/* Divider */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 24 }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: '#E2E8F0' }} />
-            <Text style={{ marginHorizontal: 16, color: '#94A3B8', fontSize: 13 }}>OR</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: '#E2E8F0' }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 22 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+            <Text style={{ marginHorizontal: 12, color: A6.fg3, fontSize: 11, letterSpacing: 2 }}>
+              OR
+            </Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }} />
           </View>
 
-          {/* Google Button */}
-          <View style={{
-            borderRadius: 16, marginBottom: 12, overflow: 'hidden', backgroundColor: '#FFFFFF',
-            borderWidth: 1, borderColor: '#E2E8F0',
-            shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
-          }}>
+          {/* Google */}
+          <Glass style={{ marginBottom: 10, borderRadius: 18 }} radius={18} hi={0.06}>
             <TouchableOpacity
-              style={{ padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
-              onPress={handleGoogleAuth}
+              activeOpacity={0.85}
+              onPress={() => handleOAuth('google')}
               disabled={loading}
-            >
-              <Text style={{ color: '#0F172A', fontSize: 16, fontWeight: '700' }}>{t('contGoogle')}</Text>
+              style={{
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+              }}>
+              <Text style={{ color: A6.fg1, fontSize: 15, fontWeight: '600' }}>
+                {t('contGoogle')}
+              </Text>
             </TouchableOpacity>
-          </View>
+          </Glass>
 
-          {/* Facebook Button */}
+          {/* Facebook */}
           <TouchableOpacity
-            style={{
-              backgroundColor: '#1877F2',
-              padding: 16, borderRadius: 16,
-              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            }}
-            onPress={handleFacebookAuth}
+            activeOpacity={0.85}
+            onPress={() => handleOAuth('facebook')}
             disabled={loading}
-          >
-            <Facebook color="#fff" size={20} style={{ marginRight: 10 }} />
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Continue with Facebook</Text>
+            style={{
+              padding: 14,
+              borderRadius: 18,
+              backgroundColor: '#1877F2',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              ...Platform.select({
+                ios: {
+                  shadowColor: '#1877F2',
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.4,
+                  shadowRadius: 18,
+                },
+                android: { elevation: 6 },
+              }),
+            }}>
+            <Facebook color="white" size={18} fill="white" strokeWidth={0} />
+            <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>
+              Continue with Facebook
+            </Text>
           </TouchableOpacity>
-
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+
+      {/* Language modal */}
+      <Modal visible={langModalOpen} transparent animationType="fade">
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setLangModalOpen(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 32 }}>
+          <View
+            style={{
+              borderRadius: 20,
+              maxHeight: 400,
+              overflow: 'hidden',
+              borderWidth: 0.5,
+              borderColor: 'rgba(255,255,255,0.12)',
+            }}>
+            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={{ backgroundColor: 'rgba(2,16,21,0.9)' }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: A6.fg1,
+                  padding: 16,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: 'rgba(255,255,255,0.08)',
+                }}>
+                {t('selectLanguage')}
+              </Text>
+              <FlatList
+                data={LANGUAGES}
+                keyExtractor={(item) => item.code}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setLanguage(item.name);
+                      setLangModalOpen(false);
+                    }}
+                    style={{
+                      padding: 16,
+                      borderBottomWidth: 0.5,
+                      borderBottomColor: 'rgba(255,255,255,0.05)',
+                      backgroundColor: item.name === language ? `${A6.primary}1A` : 'transparent',
+                    }}>
+                    <Text
+                      style={{
+                        color: item.name === language ? A6.primaryLight : A6.fg1,
+                        fontSize: 15,
+                        fontWeight: item.name === language ? '800' : '500',
+                      }}>
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Country modal */}
+      <Modal visible={countryModalOpen} transparent animationType="fade">
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setCountryModalOpen(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 }}>
+          <View
+            style={{
+              borderRadius: 20,
+              maxHeight: 450,
+              overflow: 'hidden',
+              borderWidth: 0.5,
+              borderColor: 'rgba(255,255,255,0.12)',
+            }}>
+            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={{ backgroundColor: 'rgba(2,16,21,0.9)' }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: A6.fg1,
+                  padding: 16,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: 'rgba(255,255,255,0.08)',
+                }}>
+                Select Country
+              </Text>
+              <FlatList
+                data={countryList}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCountry(item);
+                      setCity('');
+                      setCountryModalOpen(false);
+                    }}
+                    style={{
+                      padding: 16,
+                      borderBottomWidth: 0.5,
+                      borderBottomColor: 'rgba(255,255,255,0.05)',
+                      backgroundColor: item === country ? `${A6.primary}1A` : 'transparent',
+                    }}>
+                    <Text
+                      style={{
+                        color: item === country ? A6.primaryLight : A6.fg1,
+                        fontSize: 15,
+                        fontWeight: item === country ? '800' : '500',
+                      }}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* City modal */}
+      <Modal visible={cityModalOpen} transparent animationType="fade">
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setCityModalOpen(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 }}>
+          <View
+            style={{
+              borderRadius: 20,
+              maxHeight: 450,
+              overflow: 'hidden',
+              borderWidth: 0.5,
+              borderColor: 'rgba(255,255,255,0.12)',
+            }}>
+            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={{ backgroundColor: 'rgba(2,16,21,0.9)' }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: A6.fg1,
+                  padding: 16,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: 'rgba(255,255,255,0.08)',
+                }}>
+                Select City — {country}
+              </Text>
+              <FlatList
+                data={cityList}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCity(item);
+                      setCityModalOpen(false);
+                    }}
+                    style={{
+                      padding: 16,
+                      borderBottomWidth: 0.5,
+                      borderBottomColor: 'rgba(255,255,255,0.05)',
+                      backgroundColor: item === city ? `${A6.primary}1A` : 'transparent',
+                    }}>
+                    <Text
+                      style={{
+                        color: item === city ? A6.primaryLight : A6.fg1,
+                        fontSize: 15,
+                        fontWeight: item === city ? '800' : '500',
+                      }}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
   );
 }

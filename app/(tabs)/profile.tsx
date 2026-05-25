@@ -1,24 +1,48 @@
 import { useState, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, Image, Modal, FlatList } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Image,
+  Modal,
+  FlatList,
+  Platform,
+  StyleSheet,
+} from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, KeyRound, LogOut, AtSign, ChevronRight, ChevronDown, Pencil, Moon, Sun, UtensilsCrossed, Monitor } from 'lucide-react-native';
+import {
+  Camera,
+  KeyRound,
+  LogOut,
+  AtSign,
+  ChevronRight,
+  ChevronDown,
+  Pencil,
+  Moon,
+  Sun,
+  UtensilsCrossed,
+  Monitor,
+} from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCustomAlert } from '../../components/CustomAlert';
 import { useAppTheme } from '../context/ThemeContext';
 import { getCountryNames, getCitiesForCountry } from '../../lib/countries';
+import { A6 } from '../../lib/theme';
+import { Page, Glass } from '../../components/ui/A6';
+import { BlurView } from 'expo-blur';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
-  const { resolvedScheme, themeMode, setThemeMode } = useAppTheme();
-  const isDark = resolvedScheme === 'dark';
+  const { themeMode, setThemeMode } = useAppTheme();
   const router = useRouter();
   const { alert } = useCustomAlert();
 
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
@@ -35,7 +59,6 @@ export default function ProfileScreen() {
   const countryList = getCountryNames();
   const cityList = country ? getCitiesForCountry(country) : [];
 
-  // Reload profile every time the tab comes into focus (catches username changes)
   useFocusEffect(
     useCallback(() => {
       if (user) loadProfile();
@@ -43,7 +66,6 @@ export default function ProfileScreen() {
   );
 
   async function loadProfile() {
-    setLoading(true);
     const { data } = await supabase.from('users').select('*').eq('id', user?.id).single();
     if (data) {
       setFullName(data.full_name || '');
@@ -57,7 +79,6 @@ export default function ProfileScreen() {
       setCountry(data.country || '');
       setCity(data.city || '');
     }
-    setLoading(false);
   }
 
   async function updateProfile() {
@@ -74,21 +95,21 @@ export default function ProfileScreen() {
     }
 
     setSaving(true);
-    const { error } = await supabase.from('users').update({
-      full_name: fullName.trim(),
-      weight: parsedWeight,
-      goal_weight: parsedGoalWeight,
-      country: country.trim() || null,
-      city: city.trim() || null,
-      updated_at: new Date().toISOString(),
-    }).eq('id', user?.id);
+    const { error } = await supabase
+      .from('users')
+      .update({
+        full_name: fullName.trim(),
+        weight: parsedWeight,
+        goal_weight: parsedGoalWeight,
+        country: country.trim() || null,
+        city: city.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user?.id);
     setSaving(false);
 
-    if (error) {
-      alert('Update Failed', error.message);
-    } else {
-      alert('Success', 'Profile updated successfully!');
-    }
+    if (error) alert('Update Failed', error.message);
+    else alert('Success', 'Profile updated successfully!');
   }
 
   async function pickImage() {
@@ -99,7 +120,6 @@ export default function ProfileScreen() {
       quality: 0.1,
       base64: true,
     });
-
     if (!result.canceled && result.assets[0].base64) {
       const b64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
       setAvatarUrl(b64);
@@ -112,113 +132,212 @@ export default function ProfileScreen() {
   function handleLogout() {
     alert('Sign Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Sign Out', 
-        style: 'destructive', 
+      {
+        text: 'Sign Out',
+        style: 'destructive',
         onPress: () => {
           signOut();
           router.replace('/(auth)/login');
-        }
-      }
+        },
+      },
     ]);
   }
 
-  // ── Dark-aware color helpers ──
-  const bg = isDark ? '#09090B' : '#F8FAFC';
-  const bgEnd = isDark ? '#1E293B' : '#FFFFFF';
-  const cardBg = isDark ? '#1E293B' : '#FFFFFF';
-  const cardBorder = isDark ? '#334155' : '#E2E8F0';
-  const textPrimary = isDark ? '#F8FAFC' : '#0F172A';
-  const textSecondary = isDark ? '#94A3B8' : '#64748B';
-  const inputBg = isDark ? '#0F172A' : '#F8FAFC';
-  const chipBg = isDark ? '#0F172A' : '#F8FAFC';
-  const subtleBg = isDark ? '#0F172A' : '#F1F5F9';
-  const shadowColor = isDark ? '#000' : '#000';
-  const shadowOp = isDark ? 0.3 : 0.04;
-  const modalBg = isDark ? '#1E293B' : '#FFFFFF';
-  const modalItemBg = isDark ? '#0F172A' : '#F1F5F9';
+  const initials = (fullName || username || user?.email || 'A').slice(0, 1).toUpperCase();
+
+  const inputStyle = {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: A6.inputBg,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.1)',
+    color: A6.fg1,
+    fontSize: 14,
+  } as const;
+
+  const labelStyle = {
+    fontSize: 11,
+    color: A6.fg2,
+    fontWeight: '600' as const,
+    marginBottom: 6,
+    marginLeft: 2,
+  };
+
+  const ChipBtn = ({ children, onPress }: { children: string; onPress: () => void }) => (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 10,
+        backgroundColor: A6.fgFaint,
+      }}>
+      <Text style={{ fontSize: 11, color: A6.fg2, fontWeight: '600' }}>{children}</Text>
+    </TouchableOpacity>
+  );
 
   return (
-    <LinearGradient colors={[bg, bgEnd]} style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140 }}>
-        {/* Upgrade Banner for Profile */}
-        <TouchableOpacity onPress={() => router.push('/paywall')} style={{ backgroundColor: '#6FAF4F', padding: 16, borderRadius: 20, marginBottom: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}>
-          <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Upgrade for as low as $5.99/month</Text>
+    <Page padTop={48}>
+      {/* Upgrade banner */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => router.push('/paywall')}
+          style={{
+            borderRadius: 18,
+            overflow: 'hidden',
+            ...Platform.select({
+              ios: {
+                shadowColor: A6.primary,
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.45,
+                shadowRadius: 18,
+              },
+              android: { elevation: 6 },
+            }),
+          }}>
+          <LinearGradient
+            colors={[A6.primary, A6.primaryLight]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ paddingVertical: 14, paddingHorizontal: 18, alignItems: 'center' }}>
+            <Text style={{ color: A6.bgInk, fontWeight: '800', fontSize: 14 }}>
+              Upgrade for as low as $5.99 / month →
+            </Text>
+          </LinearGradient>
         </TouchableOpacity>
+      </View>
 
-        {/* Avatar */}
-        <View style={{ alignItems: 'center', marginTop: 10, marginBottom: 24 }}>
-          <TouchableOpacity onPress={pickImage} activeOpacity={0.8}>
-            <View style={{
-              width: 120, height: 120, borderRadius: 60,
-              backgroundColor: chipBg,
-              borderWidth: 3, borderColor: cardBg,
-              overflow: 'hidden', justifyContent: 'center', alignItems: 'center',
-              shadowColor, shadowOffset: { width: 0, height: 4 }, shadowOpacity: shadowOp, shadowRadius: 10, elevation: 4
+      {/* Avatar */}
+      <View style={{ alignItems: 'center', paddingVertical: 12, paddingBottom: 24 }}>
+        <TouchableOpacity onPress={pickImage} activeOpacity={0.85}>
+          <View
+            style={{
+              width: 110,
+              height: 110,
+              borderRadius: 55,
+              borderWidth: 3,
+              borderColor: A6.bgInk,
+              overflow: 'hidden',
+              ...Platform.select({
+                ios: {
+                  shadowColor: A6.primary,
+                  shadowOffset: { width: 0, height: 12 },
+                  shadowOpacity: 0.6,
+                  shadowRadius: 22,
+                },
+                android: { elevation: 12 },
+              }),
             }}>
-              {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={{ width: 120, height: 120 }} />
-              ) : (
-                <Camera color={textSecondary} size={32} />
-              )}
-            </View>
-            <View style={{
-              position: 'absolute', bottom: 0, right: 0, backgroundColor: '#6FAF4F',
-              width: 36, height: 36, borderRadius: 18, overflow: 'hidden',
-              justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: cardBg,
-              shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4, elevation: 4
-            }}>
-              <Camera color="#FFFFFF" size={16} />
-            </View>
-          </TouchableOpacity>
-          <Text style={{ marginTop: 16, fontSize: 22, fontWeight: '800', color: textPrimary }}>
-            {fullName || 'Welcome Back'}
-          </Text>
-        </View>
-
-        {/* Username Display (Read-Only) */}
-        <View style={{ backgroundColor: cardBg, borderRadius: 20, padding: 18, marginBottom: 16, shadowColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: shadowOp, shadowRadius: 8, elevation: 2 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <View style={{ backgroundColor: 'rgba(47, 164, 215, 0.1)', padding: 10, borderRadius: 12, marginRight: 14 }}>
-                <AtSign color="#2FA4D7" size={20} />
-              </View>
-              <View>
-                <Text style={{ color: textSecondary, fontSize: 12, fontWeight: '600' }}>Username</Text>
-                <Text style={{ color: textPrimary, fontSize: 17, fontWeight: '700' }}>
-                  {username ? `@${username}` : 'Not set'}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={() => router.push('/change-username')}
-              style={{ backgroundColor: subtleBg, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center' }}
-            >
-              <Pencil color={textSecondary} size={14} />
-              <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '600', marginLeft: 6 }}>Change</Text>
-            </TouchableOpacity>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%' }} />
+            ) : (
+              <LinearGradient
+                colors={[A6.primary, A6.primaryLight, A6.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: A6.bgInk, fontSize: 40, fontWeight: '700' }}>{initials}</Text>
+              </LinearGradient>
+            )}
           </View>
-        </View>
+          <View
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              borderWidth: 3,
+              borderColor: A6.bgInk,
+              overflow: 'hidden',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <LinearGradient
+              colors={[A6.primary, A6.primaryLight]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                ...StyleSheet.absoluteFillObject,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <Camera size={14} color={A6.bgInk} strokeWidth={2} />
+            </LinearGradient>
+          </View>
+        </TouchableOpacity>
+        <Text
+          style={{
+            marginTop: 14,
+            fontSize: 22,
+            fontWeight: '600',
+            letterSpacing: -0.5,
+            color: A6.fg1,
+          }}>
+          {fullName || 'Welcome Back'}
+        </Text>
+      </View>
 
-        {/* Dietary Preferences Display */}
-        <View style={{ backgroundColor: cardBg, borderRadius: 20, padding: 18, marginBottom: 16, shadowColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: shadowOp, shadowRadius: 8, elevation: 2 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ backgroundColor: 'rgba(251, 191, 36, 0.15)', padding: 10, borderRadius: 12, marginRight: 14 }}>
-                <UtensilsCrossed color="#FBBF24" size={20} />
-              </View>
-              <Text style={{ color: textPrimary, fontSize: 16, fontWeight: '700' }}>Dietary Profile</Text>
+      <View style={{ paddingHorizontal: 20 }}>
+        {/* Username row */}
+        <Glass
+          style={{
+            padding: 14,
+            marginBottom: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}>
+          <View
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 11,
+              backgroundColor: `${A6.primaryLight}1F`,
+              borderWidth: 0.5,
+              borderColor: `${A6.primaryLight}55`,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: 14,
+            }}>
+            <AtSign color={A6.primaryLight} size={18} strokeWidth={1.8} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 10, color: A6.fg2, fontWeight: '600', letterSpacing: 0.5 }}>
+              Username
+            </Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: A6.fg1, marginTop: 1 }}>
+              {username ? `@${username}` : 'Not set'}
+            </Text>
+          </View>
+          <ChipBtn onPress={() => router.push('/change-username')}>Change</ChipBtn>
+        </Glass>
+
+        {/* Dietary profile */}
+        <Glass style={{ padding: 14, marginBottom: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+            <View
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 11,
+                backgroundColor: `${A6.warn}1A`,
+                borderWidth: 0.5,
+                borderColor: `${A6.warn}44`,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <UtensilsCrossed color={A6.warn} size={18} strokeWidth={1.7} />
             </View>
-            <TouchableOpacity
-              onPress={() => router.push('/change-preferences')}
-              style={{ backgroundColor: subtleBg, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center' }}
-            >
-              <Pencil color={textSecondary} size={14} />
-              <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '600', marginLeft: 6 }}>Change</Text>
-            </TouchableOpacity>
+            <Text style={{ fontSize: 14, fontWeight: '600', flex: 1, color: A6.fg1 }}>
+              Dietary Profile
+            </Text>
+            <ChipBtn onPress={() => router.push('/change-preferences')}>Change</ChipBtn>
           </View>
           {(dietaryPrefs || 'None').split(' | ').map((pref, i) => {
-            let label = '';
+            let label = '🍽️ Diet';
             let value = pref;
             if (pref.startsWith('Allergy:')) {
               label = '🚫 Allergy';
@@ -227,194 +346,421 @@ export default function ProfileScreen() {
               label = '🌍 Ethnicity';
               value = pref.replace('Ethnicity:', '').trim();
             } else {
-              label = '🍽️ Diet';
               value = pref === 'None' ? 'No Dietary Restrictions' : pref;
             }
             return (
-              <View key={i} style={{ backgroundColor: chipBg, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, marginBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '600' }}>{label}</Text>
-                <Text style={{ color: textPrimary, fontSize: 14, fontWeight: '700' }}>{value}</Text>
+              <View
+                key={i}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  backgroundColor: A6.fgFaint,
+                  marginBottom: 6,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                }}>
+                <Text style={{ fontSize: 12, color: A6.fg2, fontWeight: '600' }}>{label}</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: A6.fg1 }}>{value}</Text>
               </View>
             );
           })}
-        </View>
+        </Glass>
 
-        {/* Location Card with cascading dropdowns */}
-        <View style={{ backgroundColor: cardBg, borderRadius: 20, padding: 18, marginBottom: 16, shadowColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: shadowOp, shadowRadius: 8, elevation: 2 }}>
-          <Text style={{ color: textPrimary, fontSize: 16, fontWeight: '700', marginBottom: 12 }}>📍 Location</Text>
-
-          {/* Country picker */}
-          <Text style={{ color: textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6 }}>Country</Text>
+        {/* Location */}
+        <Glass style={{ padding: 14, marginBottom: 10 }}>
+          <Text style={{ color: A6.fg1, fontSize: 14, fontWeight: '600', marginBottom: 12 }}>
+            📍 Location
+          </Text>
+          <Text style={[labelStyle]}>Country</Text>
           <TouchableOpacity
             onPress={() => setCountryModalOpen(true)}
-            style={{ backgroundColor: inputBg, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: cardBorder, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}
-          >
-            <Text style={{ color: country ? textPrimary : textSecondary, fontSize: 15 }}>{country || 'Select Country'}</Text>
-            <ChevronDown color={textSecondary} size={18} />
+            style={{
+              ...inputStyle,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 12,
+            }}>
+            <Text style={{ color: country ? A6.fg1 : A6.fg3, fontSize: 14 }}>
+              {country || 'Select Country'}
+            </Text>
+            <ChevronDown color={A6.fg3} size={18} />
           </TouchableOpacity>
 
-          {/* City picker */}
-          <Text style={{ color: textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 6 }}>City</Text>
+          <Text style={[labelStyle]}>City</Text>
           <TouchableOpacity
-            onPress={() => { if (!country) { alert('Select Country', 'Please select a country first.'); return; } setCityModalOpen(true); }}
-            style={{ backgroundColor: country ? inputBg : subtleBg, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: cardBorder, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-          >
-            <Text style={{ color: city ? textPrimary : textSecondary, fontSize: 15 }}>{city || (country ? 'Select City' : 'Select Country first')}</Text>
-            <ChevronDown color={textSecondary} size={18} />
+            onPress={() => {
+              if (!country) {
+                alert('Select Country', 'Please select a country first.');
+                return;
+              }
+              setCityModalOpen(true);
+            }}
+            style={{
+              ...inputStyle,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              opacity: country ? 1 : 0.55,
+            }}>
+            <Text style={{ color: city ? A6.fg1 : A6.fg3, fontSize: 14 }}>
+              {city || (country ? 'Select City' : 'Select Country first')}
+            </Text>
+            <ChevronDown color={A6.fg3} size={18} />
           </TouchableOpacity>
+        </Glass>
 
-          {/* Country Modal */}
-          <Modal visible={countryModalOpen} transparent animationType="fade">
-            <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }} activeOpacity={1} onPress={() => setCountryModalOpen(false)}>
-              <View style={{ backgroundColor: modalBg, borderRadius: 20, maxHeight: 450, overflow: 'hidden' }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: textPrimary, padding: 16, borderBottomWidth: 1, borderBottomColor: cardBorder }}>Select Country</Text>
-                <FlatList
-                  data={countryList}
-                  keyExtractor={(item) => item}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      onPress={() => { setCountry(item); setCity(''); setCountryModalOpen(false); }}
-                      style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: cardBorder, backgroundColor: item === country ? modalItemBg : modalBg }}
-                    >
-                      <Text style={{ color: item === country ? '#6FAF4F' : textPrimary, fontSize: 15, fontWeight: item === country ? '800' : '500' }}>{item}</Text>
-                    </TouchableOpacity>
-                  )}
-                />
-              </View>
-            </TouchableOpacity>
-          </Modal>
-
-          {/* City Modal */}
-          <Modal visible={cityModalOpen} transparent animationType="fade">
-            <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }} activeOpacity={1} onPress={() => setCityModalOpen(false)}>
-              <View style={{ backgroundColor: modalBg, borderRadius: 20, maxHeight: 450, overflow: 'hidden' }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: textPrimary, padding: 16, borderBottomWidth: 1, borderBottomColor: cardBorder }}>Select City — {country}</Text>
-                <FlatList
-                  data={cityList}
-                  keyExtractor={(item) => item}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      onPress={() => { setCity(item); setCityModalOpen(false); }}
-                      style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: cardBorder, backgroundColor: item === city ? modalItemBg : modalBg }}
-                    >
-                      <Text style={{ color: item === city ? '#6FAF4F' : textPrimary, fontSize: 15, fontWeight: item === city ? '800' : '500' }}>{item}</Text>
-                    </TouchableOpacity>
-                  )}
-                />
-              </View>
-            </TouchableOpacity>
-          </Modal>
-        </View>
-
-        {/* Sleep / Wake Schedule */}
-        <View style={{ backgroundColor: cardBg, borderRadius: 20, padding: 18, marginBottom: 16, shadowColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: shadowOp, shadowRadius: 8, elevation: 2 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <Text style={{ color: textPrimary, fontSize: 16, fontWeight: '700' }}>Daily Schedule</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/meal-schedule')}
-              style={{ backgroundColor: subtleBg, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center' }}
-            >
-              <Pencil color={textSecondary} size={14} />
-              <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '600', marginLeft: 6 }}>Edit</Text>
-            </TouchableOpacity>
+        {/* Daily Schedule */}
+        <Glass style={{ padding: 14, marginBottom: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', flex: 1, color: A6.fg1 }}>
+              Daily Schedule
+            </Text>
+            <ChipBtn onPress={() => router.push('/meal-schedule')}>Edit</ChipBtn>
           </View>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1, backgroundColor: chipBg, padding: 14, borderRadius: 14, flexDirection: 'row', alignItems: 'center' }}>
-              <Sun color="#FBBF24" size={18} />
-              <View style={{ marginLeft: 10 }}>
-                <Text style={{ color: textSecondary, fontSize: 11, fontWeight: '600' }}>Wake Up</Text>
-                <Text style={{ color: textPrimary, fontSize: 15, fontWeight: '700' }}>{wakeTime || 'Not set'}</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View
+              style={{
+                flex: 1,
+                padding: 12,
+                borderRadius: 12,
+                backgroundColor: A6.fgFaint,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+              }}>
+              <Sun color={A6.warn} size={18} />
+              <View>
+                <Text style={{ fontSize: 10, color: A6.fg2, fontWeight: '600' }}>Wake Up</Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: A6.fg1,
+                    fontVariant: ['tabular-nums'],
+                  }}>
+                  {wakeTime || 'Not set'}
+                </Text>
               </View>
             </View>
-            <View style={{ flex: 1, backgroundColor: chipBg, padding: 14, borderRadius: 14, flexDirection: 'row', alignItems: 'center' }}>
-              <Moon color="#818CF8" size={18} />
-              <View style={{ marginLeft: 10 }}>
-                <Text style={{ color: textSecondary, fontSize: 11, fontWeight: '600' }}>Bedtime</Text>
-                <Text style={{ color: textPrimary, fontSize: 15, fontWeight: '700' }}>{sleepTime || 'Not set'}</Text>
+            <View
+              style={{
+                flex: 1,
+                padding: 12,
+                borderRadius: 12,
+                backgroundColor: A6.fgFaint,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+              }}>
+              <Moon color={A6.tertiary} size={18} />
+              <View>
+                <Text style={{ fontSize: 10, color: A6.fg2, fontWeight: '600' }}>Bedtime</Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: A6.fg1,
+                    fontVariant: ['tabular-nums'],
+                  }}>
+                  {sleepTime || 'Not set'}
+                </Text>
               </View>
             </View>
           </View>
-        </View>
+        </Glass>
 
-        {/* Theme Preferences */}
-        <View style={{ backgroundColor: cardBg, borderRadius: 20, padding: 18, marginBottom: 16, shadowColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: shadowOp, shadowRadius: 8, elevation: 2 }}>
-          <Text style={{ color: textPrimary, fontSize: 16, fontWeight: '700', marginBottom: 16 }}>Theme Preferences</Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <TouchableOpacity onPress={() => setThemeMode('light')} style={{ flex: 1, backgroundColor: themeMode === 'light' ? 'rgba(111, 175, 79, 0.15)' : chipBg, padding: 14, borderRadius: 14, alignItems: 'center', borderWidth: 2, borderColor: themeMode === 'light' ? '#6FAF4F' : 'transparent' }}>
-               <Sun color={themeMode === 'light' ? '#6FAF4F' : textSecondary} size={20} />
-               <Text style={{ marginTop: 8, color: themeMode === 'light' ? '#6FAF4F' : textSecondary, fontWeight: '700', fontSize: 13 }}>Light</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity onPress={() => setThemeMode('dark')} style={{ flex: 1, backgroundColor: themeMode === 'dark' ? 'rgba(111, 175, 79, 0.15)' : chipBg, padding: 14, borderRadius: 14, alignItems: 'center', borderWidth: 2, borderColor: themeMode === 'dark' ? '#6FAF4F' : 'transparent' }}>
-               <Moon color={themeMode === 'dark' ? '#6FAF4F' : textSecondary} size={20} />
-               <Text style={{ marginTop: 8, color: themeMode === 'dark' ? '#6FAF4F' : textSecondary, fontWeight: '700', fontSize: 13 }}>Dark</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setThemeMode('system')} style={{ flex: 1, backgroundColor: themeMode === 'system' ? 'rgba(111, 175, 79, 0.15)' : chipBg, padding: 14, borderRadius: 14, alignItems: 'center', borderWidth: 2, borderColor: themeMode === 'system' ? '#6FAF4F' : 'transparent' }}>
-               <Monitor color={themeMode === 'system' ? '#6FAF4F' : textSecondary} size={20} />
-               <Text style={{ marginTop: 8, color: themeMode === 'system' ? '#6FAF4F' : textSecondary, fontWeight: '700', fontSize: 13 }}>System</Text>
-            </TouchableOpacity>
+        {/* Theme */}
+        <Glass style={{ padding: 14, marginBottom: 10 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', marginBottom: 10, color: A6.fg1 }}>
+            Theme
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {[
+              { id: 'light', l: 'Light', Icon: Sun },
+              { id: 'dark', l: 'Dark', Icon: Moon },
+              { id: 'system', l: 'System', Icon: Monitor },
+            ].map((opt) => {
+              const on = themeMode === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  activeOpacity={0.85}
+                  onPress={() => setThemeMode(opt.id as any)}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: on ? `${A6.primary}1F` : A6.fgFaint,
+                    borderWidth: 1,
+                    borderColor: on ? `${A6.primary}66` : 'transparent',
+                    alignItems: 'center',
+                  }}>
+                  <opt.Icon color={on ? A6.primaryLight : A6.fg2} size={18} strokeWidth={1.8} />
+                  <Text
+                    style={{
+                      marginTop: 4,
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: on ? A6.primaryLight : A6.fg2,
+                    }}>
+                    {opt.l}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        </View>
+        </Glass>
 
-        {/* Editable Fields */}
-        <View style={{ backgroundColor: cardBg, borderRadius: 24, padding: 20, marginBottom: 16, shadowColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: shadowOp, shadowRadius: 8, elevation: 2 }}>
-          
-          <Text style={{ color: textSecondary, marginBottom: 6, fontWeight: '600', fontSize: 13, marginLeft: 4 }}>Full Name</Text>
+        {/* Editable fields */}
+        <Glass style={{ padding: 16, marginBottom: 10 }}>
+          <Text style={[labelStyle]}>Full Name</Text>
           <TextInput
-            style={{ backgroundColor: inputBg, padding: 16, borderRadius: 16, color: textPrimary, marginBottom: 16, borderWidth: 1, borderColor: cardBorder }}
-            value={fullName} onChangeText={setFullName} placeholder="e.g. John Doe" placeholderTextColor={textSecondary}
+            style={{ ...inputStyle, marginBottom: 12 }}
+            value={fullName}
+            onChangeText={setFullName}
+            placeholder="e.g. John Doe"
+            placeholderTextColor={A6.fg3}
           />
-
-          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: textSecondary, marginBottom: 6, fontWeight: '600', fontSize: 13, marginLeft: 4 }}>Current Weight</Text>
+              <Text style={[labelStyle]}>Current Weight (kg)</Text>
               <TextInput
-                style={{ backgroundColor: inputBg, padding: 16, borderRadius: 16, color: textPrimary, borderWidth: 1, borderColor: cardBorder }}
-                value={weight} onChangeText={setWeight} keyboardType="numeric" placeholder="kg" placeholderTextColor={textSecondary}
+                style={inputStyle}
+                value={weight}
+                onChangeText={setWeight}
+                keyboardType="numeric"
+                placeholder="kg"
+                placeholderTextColor={A6.fg3}
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: textSecondary, marginBottom: 6, fontWeight: '600', fontSize: 13, marginLeft: 4 }}>Goal Weight</Text>
+              <Text style={[labelStyle]}>Goal Weight (kg)</Text>
               <TextInput
-                style={{ backgroundColor: inputBg, padding: 16, borderRadius: 16, color: textPrimary, borderWidth: 1, borderColor: cardBorder }}
-                value={goalWeight} onChangeText={setGoalWeight} keyboardType="numeric" placeholder="kg" placeholderTextColor={textSecondary}
+                style={inputStyle}
+                value={goalWeight}
+                onChangeText={setGoalWeight}
+                keyboardType="numeric"
+                placeholder="kg"
+                placeholderTextColor={A6.fg3}
               />
             </View>
           </View>
-
-          <TouchableOpacity onPress={updateProfile} disabled={saving} style={{ backgroundColor: '#6FAF4F', padding: 18, borderRadius: 16, alignItems: 'center', marginTop: 4, shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 4 }}>
-            {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>Save Changes</Text>}
-          </TouchableOpacity>
-        </View>
-
-        {/* Settings Buttons */}
-        <View style={{ gap: 12 }}>
-          {/* Change Password */}
           <TouchableOpacity
-            onPress={() => router.push('/change-password')}
-            style={{ backgroundColor: cardBg, padding: 18, borderRadius: 16, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: cardBorder, shadowColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.02, shadowRadius: 6, elevation: 1 }}
-          >
-            <View style={{ backgroundColor: subtleBg, padding: 10, borderRadius: 12, marginRight: 14 }}>
-              <KeyRound color={textSecondary} size={20} />
-            </View>
-            <Text style={{ flex: 1, color: textPrimary, fontSize: 16, fontWeight: '600' }}>Change Password</Text>
-            <ChevronRight color={textSecondary} size={20} />
+            onPress={updateProfile}
+            disabled={saving}
+            activeOpacity={0.85}
+            style={{
+              borderRadius: 14,
+              overflow: 'hidden',
+              ...Platform.select({
+                ios: {
+                  shadowColor: A6.primary,
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.45,
+                  shadowRadius: 18,
+                },
+                android: { elevation: 6 },
+              }),
+            }}>
+            <LinearGradient
+              colors={[A6.primary, A6.primaryLight]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ padding: 14, alignItems: 'center' }}>
+              {saving ? (
+                <ActivityIndicator color={A6.bgInk} />
+              ) : (
+                <Text style={{ color: A6.bgInk, fontWeight: '800', fontSize: 15 }}>
+                  Save Changes
+                </Text>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
+        </Glass>
 
-          {/* Sign Out */}
-          <TouchableOpacity
-            onPress={handleLogout}
-            style={{ backgroundColor: isDark ? '#2D1111' : '#FEF2F2', padding: 18, borderRadius: 16, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: isDark ? '#7F1D1D' : '#FCA5A5' }}
-          >
-            <View style={{ backgroundColor: isDark ? '#450A0A' : '#FEE2E2', padding: 10, borderRadius: 12, marginRight: 14 }}>
-              <LogOut color="#EF4444" size={20} />
+        {/* Change Password */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => router.push('/change-password')}
+          style={{
+            padding: 14,
+            marginBottom: 8,
+            borderRadius: 16,
+            backgroundColor: A6.cardBg,
+            borderWidth: 0.5,
+            borderColor: 'rgba(255,255,255,0.1)',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+          }}>
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: A6.fgFaint,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <KeyRound color={A6.fg2} size={18} strokeWidth={1.8} />
+          </View>
+          <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: A6.fg1 }}>
+            Change Password
+          </Text>
+          <ChevronRight color={A6.fg2} size={18} strokeWidth={1.8} />
+        </TouchableOpacity>
+
+        {/* Sign Out */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={handleLogout}
+          style={{
+            padding: 14,
+            marginBottom: 8,
+            borderRadius: 16,
+            backgroundColor: `${A6.danger}0a`,
+            borderWidth: 0.5,
+            borderColor: `${A6.danger}33`,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+          }}>
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: `${A6.danger}1A`,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <LogOut color={A6.danger} size={18} strokeWidth={1.8} />
+          </View>
+          <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: A6.danger }}>
+            Sign Out
+          </Text>
+          <ChevronRight color={A6.danger} size={18} strokeWidth={1.8} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Country modal */}
+      <Modal visible={countryModalOpen} transparent animationType="fade">
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setCountryModalOpen(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', padding: 24, justifyContent: 'center' }}>
+          <View
+            style={{
+              borderRadius: 20,
+              maxHeight: 450,
+              overflow: 'hidden',
+              borderWidth: 0.5,
+              borderColor: 'rgba(255,255,255,0.12)',
+            }}>
+            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={{ backgroundColor: 'rgba(2,16,21,0.9)' }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: A6.fg1,
+                  padding: 16,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: 'rgba(255,255,255,0.08)',
+                }}>
+                Select Country
+              </Text>
+              <FlatList
+                data={countryList}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCountry(item);
+                      setCity('');
+                      setCountryModalOpen(false);
+                    }}
+                    style={{
+                      padding: 16,
+                      borderBottomWidth: 0.5,
+                      borderBottomColor: 'rgba(255,255,255,0.05)',
+                      backgroundColor: item === country ? `${A6.primary}1A` : 'transparent',
+                    }}>
+                    <Text
+                      style={{
+                        color: item === country ? A6.primaryLight : A6.fg1,
+                        fontSize: 15,
+                        fontWeight: item === country ? '800' : '500',
+                      }}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
             </View>
-            <Text style={{ flex: 1, color: '#EF4444', fontSize: 16, fontWeight: '600' }}>Sign Out</Text>
-            <ChevronRight color="#EF4444" size={20} />
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </LinearGradient>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* City modal */}
+      <Modal visible={cityModalOpen} transparent animationType="fade">
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setCityModalOpen(false)}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', padding: 24, justifyContent: 'center' }}>
+          <View
+            style={{
+              borderRadius: 20,
+              maxHeight: 450,
+              overflow: 'hidden',
+              borderWidth: 0.5,
+              borderColor: 'rgba(255,255,255,0.12)',
+            }}>
+            <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={{ backgroundColor: 'rgba(2,16,21,0.9)' }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: A6.fg1,
+                  padding: 16,
+                  borderBottomWidth: 0.5,
+                  borderBottomColor: 'rgba(255,255,255,0.08)',
+                }}>
+                Select City — {country}
+              </Text>
+              <FlatList
+                data={cityList}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setCity(item);
+                      setCityModalOpen(false);
+                    }}
+                    style={{
+                      padding: 16,
+                      borderBottomWidth: 0.5,
+                      borderBottomColor: 'rgba(255,255,255,0.05)',
+                      backgroundColor: item === city ? `${A6.primary}1A` : 'transparent',
+                    }}>
+                    <Text
+                      style={{
+                        color: item === city ? A6.primaryLight : A6.fg1,
+                        fontSize: 15,
+                        fontWeight: item === city ? '800' : '500',
+                      }}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </Page>
   );
 }

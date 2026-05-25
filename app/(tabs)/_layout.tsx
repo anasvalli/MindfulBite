@@ -2,13 +2,11 @@ import { Tabs } from 'expo-router';
 import { Home, History, MessageSquare, Calendar, PieChart, User } from 'lucide-react-native';
 import { Platform, View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLanguage } from '../context/LanguageContext';
 import { BlurView } from 'expo-blur';
-import { useAppTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
+import { A6 } from '../../lib/theme';
 
 export default function TabLayout() {
-  const { resolvedScheme } = useAppTheme();
-  const isDark = resolvedScheme === 'dark';
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
 
@@ -19,9 +17,9 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarHideOnKeyboard: true,
-        tabBarActiveTintColor: '#2FA4D7',
-        tabBarInactiveTintColor: isDark ? '#64748B' : '#94a3b8',
-        headerShown: true,
+        tabBarActiveTintColor: A6.primaryLight,
+        tabBarInactiveTintColor: A6.fg3,
+        headerShown: false,
         tabBarStyle: {
           position: 'absolute',
           borderTopWidth: 0,
@@ -32,76 +30,73 @@ export default function TabLayout() {
           paddingTop: 12,
         },
         tabBarBackground: () => (
-          <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)' }]}>
-            <BlurView tint={isDark ? 'dark' : 'light'} intensity={80} style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(9, 9, 11, 0.92)' : 'rgba(255, 255, 255, 0.9)' }]} />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                overflow: 'hidden',
+                borderTopWidth: StyleSheet.hairlineWidth,
+                borderTopColor: 'rgba(255, 255, 255, 0.08)',
+                backgroundColor: 'rgba(2,16,21,0.55)',
+              },
+            ]}>
+            <BlurView
+              tint="dark"
+              intensity={50}
+              experimentalBlurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            />
           </View>
         ),
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '700',
+          letterSpacing: 0.3,
         },
-        headerStyle: {
-          backgroundColor: isDark ? '#09090B' : '#ffffff',
-          shadowOpacity: 0,
-          elevation: 0,
-          borderBottomWidth: 1,
-          borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
-        },
-        headerTitleStyle: {
-          fontSize: 18,
-          fontWeight: '800',
-          color: isDark ? '#F8FAFC' : '#0f172a',
-        },
-        headerTintColor: isDark ? '#F8FAFC' : '#0f172a',
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: t('home'),
-          tabBarIcon: ({ color }) => <Home color={color} size={22} />,
+          tabBarIcon: ({ color }) => <Home color={color} size={22} strokeWidth={1.6} />,
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
           title: t('logs'),
-          tabBarIcon: ({ color }) => <History color={color} size={22} />,
+          tabBarIcon: ({ color }) => <History color={color} size={22} strokeWidth={1.6} />,
         }}
       />
       <Tabs.Screen
         name="chat"
         options={{
           title: t('coach'),
-          tabBarIcon: ({ color }) => <MessageSquare color={color} size={22} />,
+          tabBarIcon: ({ color }) => <MessageSquare color={color} size={22} strokeWidth={1.6} />,
         }}
       />
       <Tabs.Screen
         name="plans"
         options={{
           title: t('plans'),
-          tabBarIcon: ({ color }) => <Calendar color={color} size={22} />,
+          tabBarIcon: ({ color }) => <Calendar color={color} size={22} strokeWidth={1.6} />,
         }}
       />
       <Tabs.Screen
         name="insights"
         options={{
           title: t('insights'),
-          tabBarIcon: ({ color }) => <PieChart color={color} size={22} />,
+          tabBarIcon: ({ color }) => <PieChart color={color} size={22} strokeWidth={1.6} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <User color={color} size={22} />
+          tabBarIcon: ({ color }) => <User color={color} size={22} strokeWidth={1.6} />,
         }}
       />
-      <Tabs.Screen
-        name="two"
-        options={{
-          href: null,
-        }}
-      />
+      <Tabs.Screen name="two" options={{ href: null }} />
     </Tabs>
   );
 }

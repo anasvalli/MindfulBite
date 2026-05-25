@@ -1,100 +1,86 @@
-import { View, Text, TouchableOpacity, ScrollView, Animated, Easing } from 'react-native';
-import { parseTime12h, getSecondsLeft } from '../../lib/time';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { View, Text, TouchableOpacity, Animated, Easing } from 'react-native';
+import { getSecondsLeft } from '../../lib/time';
 import { useAuth } from '../context/AuthContext';
-import { Camera, Flame, Drumstick, Wheat, Droplets, Clock } from 'lucide-react-native';
+import { Camera, Drumstick, Wheat, Droplets, Clock } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../../lib/supabase';
 import * as SecureStore from 'expo-secure-store';
-import Svg, { Circle } from 'react-native-svg';
-import { usePurchases } from '../context/PurchasesContext';
+import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import UpgradeModal from '../../components/UpgradeModal';
-import { useAppTheme } from '../context/ThemeContext';
+import { A6 } from '../../lib/theme';
+import {
+  Page,
+  Glass,
+  PageHeader,
+  PillButton,
+  SectionLabel,
+  FAB,
+  A6Text,
+} from '../../components/ui/A6';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const CIRCLE_SIZE = 150;
-const STROKE_WIDTH = 12;
-const RADIUS = (CIRCLE_SIZE - STROKE_WIDTH) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const CAL_RING = 200;
+const CAL_R = 88;
+const CAL_C = 2 * Math.PI * CAL_R;
+const MEAL_RING = 150;
+const MEAL_R = 69;
+const MEAL_C = 2 * Math.PI * MEAL_R;
 
 export default function HomeScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
-  const { tier } = usePurchases();
-  const { resolvedScheme } = useAppTheme();
-  const isDark = resolvedScheme === 'dark';
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-
-  const handleCameraPress = () => {
-    router.push('/camera');
-  };
 
   const [caloriesConsumed, setCaloriesConsumed] = useState(0);
   const [calorieGoal, setCalorieGoal] = useState(2000);
   const [macros, setMacros] = useState({ protein: 0, carbs: 0, fat: 0 });
   const [recentMeals, setRecentMeals] = useState<any[]>([]);
-  const [nextMealData, setNextMealData] = useState<{ name: string; time: string; secondsLeft: number; totalSeconds: number } | null>(null);
   const [savedPlan, setSavedPlan] = useState<any[]>([]);
   const [username, setUsername] = useState<string>('');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const intervalRef = useRef<any>(null);
   const clockRef = useRef<any>(null);
 
-  // Animated calorie counter
   const animatedCalories = useRef(new Animated.Value(0)).current;
   const [displayCalories, setDisplayCalories] = useState(0);
-  const ringProgress = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
     useCallback(() => {
       async function loadData() {
         if (!user) return;
-        
         const { data: userData } = await supabase
           .from('users')
           .select('daily_calorie_goal, username')
           .eq('id', user.id)
           .single();
-          
-        if (userData?.daily_calorie_goal) {
-          setCalorieGoal(userData.daily_calorie_goal);
-        }
-        if (userData?.username) {
-          setUsername(userData.username);
-        }
+        if (userData?.daily_calorie_goal) setCalorieGoal(userData.daily_calorie_goal);
+        if (userData?.username) setUsername(userData.username);
 
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
-        
+
         const { data: mealsData } = await supabase
           .from('meals')
           .select('*')
           .eq('user_id', user.id)
           .gte('created_at', startOfDay.toISOString())
           .order('created_at', { ascending: false });
-          
+
         if (mealsData) {
           let totalCal = 0;
           let p = 0, c = 0, f = 0;
-          
           mealsData.forEach((m: any) => {
             totalCal += Number(m.total_calories || 0);
             if (m.macros_json) {
-               p += Number(m.macros_json.protein || 0);
-               c += Number(m.macros_json.carbs || 0);
-               f += Number(m.macros_json.fat || 0);
+              p += Number(m.macros_json.protein || 0);
+              c += Number(m.macros_json.carbs || 0);
+              f += Number(m.macros_json.fat || 0);
             }
           });
-          
           setCaloriesConsumed(Math.round(totalCal));
-          setMacros({ 
-            protein: Math.round(p), 
-            carbs: Math.round(c), 
-            fat: Math.round(f) 
-          });
+          setMacros({ protein: Math.round(p), carbs: Math.round(c), fat: Math.round(f) });
           setRecentMeals(mealsData);
         } else {
           setRecentMeals([]);
@@ -102,25 +88,17 @@ export default function HomeScreen() {
           setMacros({ protein: 0, carbs: 0, fat: 0 });
         }
 
-        // Load saved meal plan for countdown (using SecureStore)
         try {
           const plan = await SecureStore.getItemAsync(`meal_plan_${user.id}`);
-          if (plan) {
-            const parsed = JSON.parse(plan);
-            setSavedPlan(parsed);
-          } else {
-            setSavedPlan([]);
-          }
+          setSavedPlan(plan ? JSON.parse(plan) : []);
         } catch {
           setSavedPlan([]);
         }
       }
-      
       loadData();
     }, [user])
   );
 
-  // Animate calorie count with smooth easing
   useEffect(() => {
     animatedCalories.setValue(0);
     Animated.timing(animatedCalories, {
@@ -135,33 +113,28 @@ export default function HomeScreen() {
     return () => animatedCalories.removeListener(listener);
   }, [caloriesConsumed]);
 
-  // Derive live next meal countdown from currentTime (updates every second via clock)
   const nextMeal = savedPlan.length > 0 ? getSecondsLeft(savedPlan) : null;
 
-  // Live clock — updates every second
   useEffect(() => {
-    clockRef.current = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    clockRef.current = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(clockRef.current);
   }, []);
 
-  // Remove the old 60-second interval — live countdown is now driven by the 1s clock above
-
-  const calProgress = calorieGoal > 0 ? Math.min((caloriesConsumed / calorieGoal) * 100, 100) : 0;
+  const calRatio = Math.min(displayCalories / Math.max(calorieGoal, 1), 1);
+  const calOffset = CAL_C * (1 - calRatio);
   const remaining = Math.max(calorieGoal - caloriesConsumed, 0);
 
-  // Next meal ring progress (defills as time approaches — 100% full = lots of time, 0% = now)
-  const mealProgress = nextMeal && nextMeal.totalSeconds > 0
-    ? Math.min((nextMeal.secondsLeft / nextMeal.totalSeconds) * 100, 100)
-    : 0;
-  const mealOffset = CIRCUMFERENCE - (mealProgress / 100) * CIRCUMFERENCE;
+  const mealRatio =
+    nextMeal && nextMeal.totalSeconds > 0
+      ? Math.min(nextMeal.secondsLeft / nextMeal.totalSeconds, 1)
+      : 0;
+  const mealOffset = MEAL_C * (1 - mealRatio);
 
   const formatCountdown = (secs: number) => {
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);
     const s = secs % 60;
-    if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+    if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
     if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`;
     return `${s}s`;
   };
@@ -173,7 +146,12 @@ export default function HomeScreen() {
     return t('goodEvening');
   };
 
-  const liveTime = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const liveTime = currentTime.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const dayLabel = currentTime.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
 
   const formatTime = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -181,217 +159,333 @@ export default function HomeScreen() {
   };
 
   return (
-    <LinearGradient colors={isDark ? ['#09090B', '#1E293B'] : ['#F8FAFC', '#FFFFFF']} style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 140 }}>
-        {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+    <Page variant="dense">
+      <PageHeader
+        eyebrow={dayLabel}
+        title={
           <View>
-            <Text style={{ fontSize: 16, color: '#2FA4D7', fontWeight: '600', marginBottom: 4 }}>
-              {greeting()} 🌟
-            </Text>
-            <Text style={{ fontSize: 28, fontWeight: '800', color: isDark ? '#F8FAFC' : '#0F172A' }}>
+            <Text style={[A6Text.title]}>{greeting()},</Text>
+            <Text
+              style={[
+                A6Text.title,
+                { fontWeight: '600', color: A6.primaryLight, marginTop: 2 },
+              ]}>
               {username || user?.email?.split('@')[0] || 'Friend'}
             </Text>
-            <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4, fontVariant: ['tabular-nums'], letterSpacing: 0.5 }}>
-              🕐 {liveTime}
-            </Text>
           </View>
-          <TouchableOpacity onPress={() => router.push('/paywall')} style={{ backgroundColor: '#6FAF4F', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}>
-            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13, textTransform: 'uppercase' }}>Upgrade</Text>
-          </TouchableOpacity>
-        </View>
+        }
+        subtitle={
+          <Text style={[A6Text.subtitle, { ...A6Text.numTabular, letterSpacing: 0.5 }]}>
+            🕐 {liveTime}
+          </Text>
+        }
+        right={<PillButton onPress={() => router.push('/paywall')}>Upgrade</PillButton>}
+      />
 
-        {/* Dual Ring Card */}
-        <View style={{
-          backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderRadius: 28, padding: 24, alignItems: 'center', overflow: 'hidden',
-          shadowColor: '#000000', shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: isDark ? 0.2 : 0.04, shadowRadius: 14, elevation: 3,
-        }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 16 }}>
+      {/* Dual ring glass card */}
+      <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+        <Glass style={{ padding: 24 }}>
+          <Text style={[A6Text.label, { textAlign: 'center', marginBottom: 14 }]}>
             {t('dailyProgress')}
           </Text>
-          
-          {/* Calories Ring */}
+
+          {/* Calories ring */}
           <View style={{ alignItems: 'center' }}>
-            <View style={{ position: 'relative', width: 200, height: 200, alignItems: 'center', justifyContent: 'center' }}>
-              <Svg width={200} height={200} style={{ position: 'absolute' }}>
-                <Circle cx={100} cy={100} r={88}
-                  stroke={isDark ? '#334155' : '#F1F5F9'} strokeWidth={14} fill="none" />
-                <Circle cx={100} cy={100} r={88}
-                  stroke={(displayCalories / calorieGoal) >= 1 ? '#f43f5e' : '#6FAF4F'} strokeWidth={14} fill="none"
-                  strokeDasharray={`${2 * Math.PI * 88}`}
-                  strokeDashoffset={2 * Math.PI * 88 - (Math.min(displayCalories / Math.max(calorieGoal, 1), 1)) * 2 * Math.PI * 88}
-                  strokeLinecap="round" rotation="-90" origin="100, 100" />
+            <View style={{ width: CAL_RING, height: CAL_RING, alignItems: 'center', justifyContent: 'center' }}>
+              <Svg width={CAL_RING} height={CAL_RING} style={{ position: 'absolute' }}>
+                <Defs>
+                  <SvgGradient id="calG" x1="0" y1="0" x2="1" y2="1">
+                    <Stop offset="0%" stopColor={A6.primary} />
+                    <Stop offset="60%" stopColor={A6.primaryLight} />
+                    <Stop offset="100%" stopColor={A6.secondary} />
+                  </SvgGradient>
+                </Defs>
+                <Circle
+                  cx={CAL_RING / 2}
+                  cy={CAL_RING / 2}
+                  r={CAL_R}
+                  stroke="rgba(255,255,255,0.06)"
+                  strokeWidth={12}
+                  fill="none"
+                />
+                <Circle
+                  cx={CAL_RING / 2}
+                  cy={CAL_RING / 2}
+                  r={CAL_R}
+                  stroke="url(#calG)"
+                  strokeWidth={12}
+                  fill="none"
+                  strokeDasharray={`${CAL_C}`}
+                  strokeDashoffset={calOffset}
+                  strokeLinecap="round"
+                  rotation="-90"
+                  origin={`${CAL_RING / 2}, ${CAL_RING / 2}`}
+                />
               </Svg>
               <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontSize: 36, fontWeight: '900', color: isDark ? '#F8FAFC' : '#0F172A' }}>
+                <Text
+                  style={{
+                    fontSize: 40,
+                    fontWeight: '300',
+                    letterSpacing: -1.5,
+                    color: A6.fg1,
+                    fontVariant: ['tabular-nums'],
+                  }}>
                   {displayCalories}
                 </Text>
-                <Text style={{ fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 }}>
+                <Text style={{ fontSize: 11, color: A6.fg2, marginTop: 4 }}>
                   of {calorieGoal} kcal
                 </Text>
               </View>
             </View>
-            <View style={{ backgroundColor: 'rgba(168, 223, 142, 0.15)', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 14, marginTop: 10 }}>
-              <Text style={{ color: '#6FAF4F', fontWeight: '700', fontSize: 13 }}>
-                {remaining > 0 ? `${remaining} remaining` : '🎉 Goal Reached!'}
+            <View
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 6,
+                borderRadius: 14,
+                backgroundColor: `${A6.primary}1F`,
+                borderWidth: 0.5,
+                borderColor: `${A6.primary}55`,
+                marginTop: 12,
+              }}>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: A6.primaryLight,
+                  letterSpacing: 0.4,
+                }}>
+                {remaining > 0 ? `${remaining} remaining` : '🎉 Goal reached!'}
               </Text>
             </View>
           </View>
 
-          {/* Divider */}
-          <View style={{ width: '80%', height: 1, backgroundColor: isDark ? '#334155' : '#F1F5F9', marginVertical: 20 }} />
+          <View
+            style={{
+              width: '80%',
+              height: 1,
+              backgroundColor: 'rgba(255,255,255,0.06)',
+              alignSelf: 'center',
+              marginVertical: 20,
+            }}
+          />
 
-          {/* Next Meal Countdown Ring */}
-          <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#94A3B8' : '#64748B', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
-            NEXT MEAL
-          </Text>
+          {/* Next meal ring */}
+          <Text style={[A6Text.label, { textAlign: 'center', marginBottom: 12 }]}>Next Meal</Text>
           <View style={{ alignItems: 'center' }}>
-            <View style={{ position: 'relative', width: CIRCLE_SIZE, height: CIRCLE_SIZE, alignItems: 'center', justifyContent: 'center' }}>
-              <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE} style={{ position: 'absolute' }}>
-                <Circle cx={CIRCLE_SIZE / 2} cy={CIRCLE_SIZE / 2} r={RADIUS}
-                  stroke={isDark ? '#334155' : '#F1F5F9'} strokeWidth={STROKE_WIDTH} fill="none" />
-                <Circle cx={CIRCLE_SIZE / 2} cy={CIRCLE_SIZE / 2} r={RADIUS}
-                  stroke="#2FA4D7" strokeWidth={STROKE_WIDTH} fill="none"
-                  strokeDasharray={`${CIRCUMFERENCE}`} strokeDashoffset={mealOffset}
-                  strokeLinecap="round" rotation="-90" origin={`${CIRCLE_SIZE / 2}, ${CIRCLE_SIZE / 2}`} />
+            <View style={{ width: MEAL_RING, height: MEAL_RING, alignItems: 'center', justifyContent: 'center' }}>
+              <Svg width={MEAL_RING} height={MEAL_RING} style={{ position: 'absolute' }}>
+                <Circle
+                  cx={MEAL_RING / 2}
+                  cy={MEAL_RING / 2}
+                  r={MEAL_R}
+                  stroke="rgba(255,255,255,0.06)"
+                  strokeWidth={10}
+                  fill="none"
+                />
+                <Circle
+                  cx={MEAL_RING / 2}
+                  cy={MEAL_RING / 2}
+                  r={MEAL_R}
+                  stroke={A6.primaryLight}
+                  strokeWidth={10}
+                  fill="none"
+                  strokeDasharray={`${MEAL_C}`}
+                  strokeDashoffset={mealOffset}
+                  strokeLinecap="round"
+                  rotation="-90"
+                  origin={`${MEAL_RING / 2}, ${MEAL_RING / 2}`}
+                />
               </Svg>
               <View style={{ alignItems: 'center' }}>
                 {nextMeal ? (
                   <>
-                    <Text style={{ fontSize: 24, fontWeight: '900', color: isDark ? '#F8FAFC' : '#0F172A' }}>
+                    <Text
+                      style={{
+                        fontSize: 22,
+                        fontWeight: '500',
+                        letterSpacing: -0.5,
+                        color: A6.fg1,
+                        fontVariant: ['tabular-nums'],
+                      }}>
                       {formatCountdown(nextMeal.secondsLeft)}
                     </Text>
-                    <Text style={{ fontSize: 12, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 }}>
+                    <Text style={{ fontSize: 10, color: A6.fg2, marginTop: 2 }}>
                       till {nextMeal.name}
                     </Text>
                   </>
                 ) : (
                   <>
-                    <Clock color={isDark ? '#64748B' : '#94A3B8'} size={24} />
-                    <Text style={{ fontSize: 12, color: isDark ? '#94A3B8' : '#64748B', marginTop: 4, textAlign: 'center' }}>
-                      No plan set
-                    </Text>
+                    <Clock color={A6.fg3} size={24} />
+                    <Text style={{ fontSize: 11, color: A6.fg2, marginTop: 4 }}>No plan set</Text>
                   </>
                 )}
               </View>
             </View>
             {nextMeal && (
-              <View style={{ backgroundColor: 'rgba(47, 164, 215, 0.1)', paddingHorizontal: 14, paddingVertical: 5, borderRadius: 12, marginTop: 8 }}>
-                <Text style={{ color: '#2FA4D7', fontWeight: '700', fontSize: 13 }}>
+              <View
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                  backgroundColor: `${A6.primaryLight}1A`,
+                  marginTop: 10,
+                }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: A6.primaryLight }}>
                   {nextMeal.time}
                 </Text>
               </View>
             )}
           </View>
 
-          {/* Divider */}
-          <View style={{ width: '80%', height: 1, backgroundColor: isDark ? '#334155' : '#F1F5F9', marginVertical: 24 }} />
+          <View
+            style={{
+              width: '80%',
+              height: 1,
+              backgroundColor: 'rgba(255,255,255,0.06)',
+              alignSelf: 'center',
+              marginVertical: 20,
+            }}
+          />
 
-          {/* Macros Row */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 4 }}>
-            <View style={{ alignItems: 'center', flex: 1 }}>
-              <View style={{ 
-                backgroundColor: 'rgba(168, 223, 142, 0.2)', 
-                width: 40, height: 40, borderRadius: 12, 
-                alignItems: 'center', justifyContent: 'center', marginBottom: 8
-              }}>
-                <Drumstick color="#65B741" size={18} />
+          {/* Macros row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            {(
+              [
+                { l: 'Protein', v: macros.protein, c: A6.secondary, Icon: Drumstick },
+                { l: 'Carbs', v: macros.carbs, c: A6.primaryLight, Icon: Wheat },
+                { l: 'Fat', v: macros.fat, c: A6.warn, Icon: Droplets },
+              ] as const
+            ).map((m) => (
+              <View key={m.l} style={{ flex: 1, alignItems: 'center' }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: `${m.c}22`,
+                    borderWidth: 0.5,
+                    borderColor: `${m.c}55`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 8,
+                  }}>
+                  <m.Icon color={m.c} size={18} strokeWidth={1.7} />
+                </View>
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: '600',
+                    letterSpacing: -0.5,
+                    color: A6.fg1,
+                    fontVariant: ['tabular-nums'],
+                  }}>
+                  {m.v}g
+                </Text>
+                <Text style={{ fontSize: 11, color: A6.fg2, marginTop: 2 }}>{m.l}</Text>
               </View>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: isDark ? '#F8FAFC' : '#0F172A' }}>{macros.protein}g</Text>
-              <Text style={{ fontSize: 11, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 }}>Protein</Text>
-            </View>
-            <View style={{ alignItems: 'center', flex: 1 }}>
-              <View style={{ 
-                backgroundColor: 'rgba(47, 164, 215, 0.15)', 
-                width: 40, height: 40, borderRadius: 12, 
-                alignItems: 'center', justifyContent: 'center', marginBottom: 8
-              }}>
-                <Wheat color="#2FA4D7" size={18} />
-              </View>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: isDark ? '#F8FAFC' : '#0F172A' }}>{macros.carbs}g</Text>
-              <Text style={{ fontSize: 11, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 }}>Carbs</Text>
-            </View>
-            <View style={{ alignItems: 'center', flex: 1 }}>
-              <View style={{ 
-                backgroundColor: 'rgba(251, 191, 36, 0.2)', 
-                width: 40, height: 40, borderRadius: 12, 
-                alignItems: 'center', justifyContent: 'center', marginBottom: 8
-              }}>
-                <Droplets color="#FBBF24" size={18} />
-              </View>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: isDark ? '#F8FAFC' : '#0F172A' }}>{macros.fat}g</Text>
-              <Text style={{ fontSize: 11, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 }}>Fat</Text>
-            </View>
+            ))}
           </View>
-        </View>
-
-        {/* Today's Meals */}
-        <View style={{ marginTop: 28 }}>
-          <Text style={{ fontSize: 20, fontWeight: '800', color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 16 }}>
-            Today's Meals
-          </Text>
-          {recentMeals.length === 0 ? (
-            <View style={{ 
-              padding: 24, borderRadius: 20, alignItems: 'center', backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-              borderWidth: 2, borderColor: isDark ? '#334155' : '#F1F5F9', borderStyle: 'dashed',
-              shadowColor: '#000000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.02, shadowRadius: 8, elevation: 1
-            }}>
-              <Camera color={isDark ? '#64748B' : '#94A3B8'} size={36} />
-              <Text style={{ color: isDark ? '#94A3B8' : '#64748B', marginTop: 12, fontSize: 15, fontWeight: '600' }}>
-                No meals logged yet
-              </Text>
-              <Text style={{ color: isDark ? '#64748B' : '#94A3B8', marginTop: 4, fontSize: 13 }}>
-                Tap the + button below to log!
-              </Text>
-            </View>
-          ) : (
-            recentMeals.map((meal, idx) => (
-              <View key={meal.id || idx} style={{
-                backgroundColor: isDark ? '#1E293B' : '#FFFFFF', padding: 16, borderRadius: 18, marginBottom: 12,
-                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: isDark ? 0.2 : 0.04, shadowRadius: 10, elevation: 3
-              }}>
-                <View style={{ flex: 1, paddingRight: 12 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '700', color: isDark ? '#F8FAFC' : '#0F172A', marginBottom: 4 }}>
-                    {meal.items_json ? meal.items_json.map((i: any) => i.name).join(', ') : 'Meal'}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: isDark ? '#94A3B8' : '#64748B' }}>
-                    {formatTime(meal.created_at)} · P: {Math.round(meal.macros_json?.protein || 0)}g · C: {Math.round(meal.macros_json?.carbs || 0)}g · F: {Math.round(meal.macros_json?.fat || 0)}g
-                  </Text>
-                </View>
-                <View style={{ 
-                  backgroundColor: '#6FAF4F', 
-                  paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12,
-                }}>
-                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>
-                    {Math.round(meal.total_calories)}
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
-
-      {/* Floating Camera Button — visible to all, gated to Premium */}
-      <View style={{
-        position: 'absolute', bottom: 130, right: 24,
-        shadowColor: '#6FAF4F', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6
-      }}>
-        <TouchableOpacity
-          style={{
-            width: 64, height: 64, borderRadius: 32,
-            alignItems: 'center', justifyContent: 'center',
-            backgroundColor: '#6FAF4F',
-          }}
-          onPress={handleCameraPress}
-        >
-          <Camera color="#FFFFFF" size={28} />
-        </TouchableOpacity>
+        </Glass>
       </View>
 
-      {/* Upgrade Modal for non-Premium users */}
+      {/* Today's meals */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
+        <SectionLabel
+          right={
+            <Text style={{ fontSize: 12, color: A6.fg2 }}>
+              {recentMeals.length} logged
+            </Text>
+          }>
+          Today's meals
+        </SectionLabel>
+
+        {recentMeals.length === 0 ? (
+          <Glass
+            style={{
+              padding: 28,
+              alignItems: 'center',
+              borderStyle: 'dashed',
+              borderColor: 'rgba(255,255,255,0.15)',
+            }}>
+            <Camera color={A6.fg3} size={36} />
+            <Text style={{ color: A6.fg1, marginTop: 12, fontSize: 15, fontWeight: '600' }}>
+              No meals logged yet
+            </Text>
+            <Text style={{ color: A6.fg2, marginTop: 4, fontSize: 13 }}>
+              Tap the camera below to log one!
+            </Text>
+          </Glass>
+        ) : (
+          <Glass>
+            {recentMeals.map((meal, idx) => (
+              <View
+                key={meal.id || idx}
+                style={{
+                  paddingVertical: 14,
+                  paddingHorizontal: 18,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  borderBottomWidth: idx < recentMeals.length - 1 ? 0.5 : 0,
+                  borderBottomColor: 'rgba(255,255,255,0.06)',
+                }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    backgroundColor: A6.fgFaint,
+                    borderWidth: 0.5,
+                    borderColor: 'rgba(255,255,255,0.08)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  <Text style={{ fontSize: 18 }}>🍽️</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 14, minWidth: 0 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '500',
+                      color: A6.fg1,
+                      marginBottom: 2,
+                    }}>
+                    {meal.items_json
+                      ? meal.items_json.map((i: any) => i.name).join(', ')
+                      : 'Meal'}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: A6.fg2, letterSpacing: 0.3 }}>
+                    {formatTime(meal.created_at)}  ·  P {Math.round(meal.macros_json?.protein || 0)}g  ·  C {Math.round(meal.macros_json?.carbs || 0)}g  ·  F {Math.round(meal.macros_json?.fat || 0)}g
+                  </Text>
+                </View>
+                <LinearGradient
+                  colors={[A6.primary, A6.primaryLight]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 10,
+                  }}>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '800',
+                      color: A6.bgInk,
+                      fontVariant: ['tabular-nums'],
+                    }}>
+                    {Math.round(meal.total_calories)}
+                  </Text>
+                </LinearGradient>
+              </View>
+            ))}
+          </Glass>
+        )}
+      </View>
+
+      <FAB onPress={() => router.push('/camera')} bottom={130} />
+
       <UpgradeModal
         visible={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
@@ -399,6 +493,6 @@ export default function HomeScreen() {
         requiredPlan="Premium"
         description="Snap a photo of any meal and our AI instantly detects the calories and macros. Available exclusively on the Premium plan."
       />
-    </LinearGradient>
+    </Page>
   );
 }

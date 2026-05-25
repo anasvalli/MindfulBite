@@ -1,5 +1,5 @@
 import '../global.css';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -8,9 +8,10 @@ import 'react-native-reanimated';
 import { AuthProvider } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { CustomAlertProvider } from '../components/CustomAlert';
-import { ThemeProviderCustom, useAppTheme } from './context/ThemeContext';
+import { ThemeProviderCustom } from './context/ThemeContext';
 import { PurchasesProvider } from './context/PurchasesContext';
 import * as Notifications from 'expo-notifications';
+import { A6 } from '../lib/theme';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -71,33 +72,21 @@ function RootLayoutNav() {
 }
 
 function ThemedApp() {
-  const { resolvedScheme } = useAppTheme();
-
-  // Build a stable theme object so React Navigation doesn't remount the tree
-  const navTheme = useMemo(() => {
-    if (resolvedScheme === 'dark') {
-      return {
-        ...DarkTheme,
-        colors: {
-          ...DarkTheme.colors,
-          background: '#09090B',
-          card: '#09090B',
-          text: '#F8FAFC',
-          border: 'rgba(255,255,255,0.08)',
-        },
-      };
-    }
-    return {
-      ...DefaultTheme,
+  // A6 Cyan Aurora Glass is dark-only — force dark nav theme for stable backgrounds.
+  const navTheme = useMemo(
+    () => ({
+      ...DarkTheme,
       colors: {
-        ...DefaultTheme.colors,
-        background: '#FFFFFF',
-        card: '#FFFFFF',
-        text: '#0F172A',
-        border: 'rgba(0,0,0,0.05)',
+        ...DarkTheme.colors,
+        background: A6.bgInk,
+        card: A6.bgInk,
+        text: A6.fg1,
+        border: 'rgba(255,255,255,0.08)',
+        primary: A6.primary,
       },
-    };
-  }, [resolvedScheme]);
+    }),
+    []
+  );
 
   return (
     <LanguageProvider>
