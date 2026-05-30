@@ -1,11 +1,21 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 
 type ThemeMode = 'light' | 'dark' | 'system'
+type AccentKey = 'gold' | 'sage' | 'azure' | 'clay'
+
+export const ACCENTS: { key: AccentKey; label: string; hue: number; swatch: string }[] = [
+  { key: 'gold', label: 'Gold', hue: 85, swatch: 'oklch(0.80 0.09 85)' },
+  { key: 'sage', label: 'Sage', hue: 150, swatch: 'oklch(0.80 0.09 150)' },
+  { key: 'azure', label: 'Azure', hue: 255, swatch: 'oklch(0.80 0.09 255)' },
+  { key: 'clay', label: 'Clay', hue: 35, swatch: 'oklch(0.80 0.09 35)' },
+]
 
 interface ThemeContextValue {
   mode: ThemeMode
   setMode: (m: ThemeMode) => void
   resolvedDark: boolean
+  accent: AccentKey
+  setAccent: (a: AccentKey) => void
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
@@ -17,31 +27,48 @@ function resolveDark(mode: ThemeMode): boolean {
   return mode === 'dark'
 }
 
+function hueFor(accent: AccentKey): number {
+  return ACCENTS.find((a) => a.key === accent)?.hue ?? 85
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>(() => {
     return (localStorage.getItem('themeMode') as ThemeMode) || 'dark'
   })
+  const [accent, setAccentState] = useState<AccentKey>(() => {
+    return (localStorage.getItem('accentColor') as AccentKey) || 'gold'
+  })
   const [resolvedDark, setResolvedDark] = useState(() => resolveDark(mode))
 
   useEffect(() => {
+    const hue = hueFor(accent)
     const dark = resolveDark(mode)
     setResolvedDark(dark)
-    applyThemeVars(dark)
+    applyThemeVars(dark, hue)
 
     if (mode === 'system') {
       const mq = window.matchMedia('(prefers-color-scheme: dark)')
-      const handler = () => { const d = mq.matches; setResolvedDark(d); applyThemeVars(d) }
+      const handler = () => { const d = mq.matches; setResolvedDark(d); applyThemeVars(d, hue) }
       mq.addEventListener('change', handler)
       return () => mq.removeEventListener('change', handler)
     }
-  }, [mode])
+  }, [mode, accent])
 
   const setMode = (m: ThemeMode) => {
     localStorage.setItem('themeMode', m)
     setModeState(m)
   }
 
-  return <ThemeContext.Provider value={{ mode, setMode, resolvedDark }}>{children}</ThemeContext.Provider>
+  const setAccent = (a: AccentKey) => {
+    localStorage.setItem('accentColor', a)
+    setAccentState(a)
+  }
+
+  return (
+    <ThemeContext.Provider value={{ mode, setMode, resolvedDark, accent, setAccent }}>
+      {children}
+    </ThemeContext.Provider>
+  )
 }
 
 export function useTheme(): ThemeContextValue {
@@ -50,7 +77,7 @@ export function useTheme(): ThemeContextValue {
   return ctx
 }
 
-function applyThemeVars(dark: boolean) {
+function applyThemeVars(dark: boolean, hue: number) {
   const root = document.documentElement
   if (dark) {
     root.style.setProperty('--bg', 'oklch(0.165 0.008 75)')
@@ -61,8 +88,11 @@ function applyThemeVars(dark: boolean) {
     root.style.setProperty('--text-muted', 'oklch(0.74 0.012 80)')
     root.style.setProperty('--text-dim', 'oklch(0.57 0.01 78)')
     root.style.setProperty('--ring-track', 'rgba(255,255,255,0.09)')
-    root.style.setProperty('--on-accent', 'oklch(0.20 0.03 85)')
+    root.style.setProperty('--on-accent', `oklch(0.20 0.03 ${hue})`)
     root.style.setProperty('--card-shadow', '0 1px 2px rgba(0,0,0,0.25)')
+    root.style.setProperty('--accent', `oklch(0.80 0.09 ${hue})`)
+    root.style.setProperty('--accent-wash', `oklch(0.80 0.09 ${hue} / 0.13)`)
+    root.style.setProperty('--accent-line', `oklch(0.80 0.09 ${hue} / 0.30)`)
   } else {
     root.style.setProperty('--bg', 'oklch(0.955 0.007 85)')
     root.style.setProperty('--surface', 'oklch(0.995 0.004 88)')
@@ -74,8 +104,8 @@ function applyThemeVars(dark: boolean) {
     root.style.setProperty('--ring-track', 'rgba(40,32,20,0.08)')
     root.style.setProperty('--on-accent', '#ffffff')
     root.style.setProperty('--card-shadow', '0 1px 3px rgba(40,32,20,0.05)')
+    root.style.setProperty('--accent', `oklch(0.56 0.10 ${hue})`)
+    root.style.setProperty('--accent-wash', `oklch(0.56 0.10 ${hue} / 0.10)`)
+    root.style.setProperty('--accent-line', `oklch(0.56 0.10 ${hue} / 0.26)`)
   }
-  root.style.setProperty('--accent', dark ? 'oklch(0.80 0.09 85)' : 'oklch(0.56 0.10 85)')
-  root.style.setProperty('--accent-wash', dark ? 'oklch(0.80 0.09 85 / 0.13)' : 'oklch(0.56 0.10 85 / 0.10)')
-  root.style.setProperty('--accent-line', dark ? 'oklch(0.80 0.09 85 / 0.30)' : 'oklch(0.56 0.10 85 / 0.26)')
 }

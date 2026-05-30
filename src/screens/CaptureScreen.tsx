@@ -10,9 +10,9 @@ interface CaptureScreenProps {
   go: (screen: string) => void
 }
 
-// 768px long edge keeps Claude image tokens (~(w*h)/750) low while preserving
-// enough detail for accurate food recognition.
-async function compressImage(dataUrl: string, maxDim = 768): Promise<string> {
+// 1024px long edge — enough detail for accurate dish recognition (curries,
+// sauces, mixed plates) while keeping Claude image tokens reasonable.
+async function compressImage(dataUrl: string, maxDim = 1024): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image()
     img.onload = () => {
@@ -135,6 +135,10 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<Partial<FoodItem>>({})
 
+  // Sage healthier-swap suggestion (result step)
+  const [swapText, setSwapText] = useState<string | null>(null)
+  const [swapLoading, setSwapLoading] = useState(false)
+
   // Barcode scanner state
   const videoRef = useRef<HTMLVideoElement>(null)
   const scanFrameRef = useRef<number>(0)
@@ -177,7 +181,7 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
     const video = cameraVideoRef.current
     if (!video) return
     const canvas = document.createElement('canvas')
-    const maxDim = 768
+    const maxDim = 1024
     const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight))
     canvas.width = Math.round(video.videoWidth * scale)
     canvas.height = Math.round(video.videoHeight * scale)
@@ -190,7 +194,7 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
     setPreviewUrl(dataUrl)
     setBase64(dataUrl)
     setStep('analyzing')
-    analyzeFoodImage(dataUrl)
+    analyzeFoodImage(dataUrl, { cuisine: profile?.cuisine_pref, dietary: profile?.dietary_prefs })
       .then((detected) => {
         setItems(detected)
         setStep('result')
@@ -238,6 +242,45 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
 
   // Always stop the photo camera when component unmounts
   useEffect(() => () => stopPhotoCamera(), [])
+
+  // Fetch a healthier-swap suggestion when entering the result step with items
+  useEffect(() => {
+    if (step !== 'result' || items.length === 0) {
+      setSwapText(null)
+      setSwapLoading(false)
+      return
+    }
+    let cancelled = false
+    const itemNames = items.map((i) => i.name).join(', ')
+    setSwapText(null)
+    setSwapLoading(true)
+    ;(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/claude', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token ?? ''}`,
+          },
+          body: JSON.stringify({
+            message: `Suggest ONE specific healthier swap for this meal in 1 short sentence (e.g. "Swap white rice for cauliflower rice to save ~180 kcal"). Meal: ${itemNames}. Reply with just the suggestion.`,
+            history: [],
+          }),
+        })
+        if (!res.ok) throw new Error(`API error ${res.status}`)
+        const data = await res.json() as { reply: string }
+        if (!cancelled && data.reply?.trim()) {
+          setSwapText(data.reply.trim())
+        }
+      } catch {
+        if (!cancelled) setSwapText(null)
+      } finally {
+        if (!cancelled) setSwapLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [step, items])
 
   async function startCamera() {
     setBarcodeError(null)
@@ -327,7 +370,7 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
       setBase64(dataUrl)
       setStep('analyzing')
       try {
-        const detected = await analyzeFoodImage(dataUrl)
+        const detected = await analyzeFoodImage(dataUrl, { cuisine: profile?.cuisine_pref, dietary: profile?.dietary_prefs })
         setItems(detected)
         setStep('result')
       } catch {
@@ -1782,6 +1825,50 @@ Accurate nutritional estimates for typical local portion sizes.`,
                 )
               )}
             </div>
+
+            {/* ── Sage healthier-swap suggestion ── */}
+            {(swapLoading || swapText) && (
+              <div
+                style={{
+                  background: 'var(--accent-wash)',
+                  border: '1px solid var(--accent-line)',
+                  borderRadius: 16,
+                  padding: '14px 16px',
+                  marginBottom: 20,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontFamily: 'var(--mono)',
+                    letterSpacing: '0.1em',
+                    color: 'var(--text-dim)',
+                    marginBottom: swapLoading ? 0 : 6,
+                  }}
+                >
+                  ✦ SAGE SUGGESTS
+                </div>
+                {swapLoading ? (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8 }}>
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="mb-dot"
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: 'var(--accent)',
+                          animationDelay: `${i * 0.18}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text)' }}>{swapText}</p>
+                )}
+              </div>
+            )}
 
             {error && (
               <div

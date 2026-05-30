@@ -3,6 +3,17 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { Card, Eyebrow, Spinner } from '../components/ui'
 import { IconChevL, IconCheck, IconClock } from '../components/icons'
+import { MOOD_HUES, MOOD_EMOJIS } from '../lib/moods'
+
+interface TodayCheckin {
+  mood: string
+  intensity: number | null
+  logged_at: string
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
 
 interface MoodScreenProps {
   go: (screen: string) => void
@@ -69,16 +80,37 @@ export function MoodScreen({ go }: MoodScreenProps) {
   const [ribbonData, setRibbonData] = useState<MoodCheckin[]>([])
   const [ribbonLoading, setRibbonLoading] = useState(true)
 
+  // Today's check-ins (timeline + count)
+  const [todayCount, setTodayCount] = useState(0)
+  const [todayCheckins, setTodayCheckins] = useState<TodayCheckin[]>([])
+
+  async function loadTodayCount() {
+    if (!user) return
+    const startOfDay = new Date()
+    startOfDay.setHours(0, 0, 0, 0)
+    const { data } = await supabase
+      .from('mood_checkins')
+      .select('mood, intensity, logged_at')
+      .eq('user_id', user.id)
+      .gte('logged_at', startOfDay.toISOString())
+      .order('logged_at', { ascending: false })
+    setTodayCheckins((data ?? []) as TodayCheckin[])
+    setTodayCount(data?.length ?? 0)
+  }
+
   // Build the 7-day ribbon columns (Mon through today's day-of-week, last 7 days)
   const ribbonDays = (() => {
     // Build a map of date -> latest checkin (data is ascending, last write wins)
+    // and a count of how many check-ins occurred that day.
     const byDate = new Map<string, MoodCheckin>()
+    const countByDate = new Map<string, number>()
     ribbonData.forEach((c) => {
       const day = c.logged_at.split('T')[0] ?? ''
       byDate.set(day, c)
+      countByDate.set(day, (countByDate.get(day) ?? 0) + 1)
     })
 
-    const days: Array<{ dayInit: string; date: string; checkin: MoodCheckin | null }> = []
+    const days: Array<{ dayInit: string; date: string; checkin: MoodCheckin | null; count: number }> = []
     for (let i = 6; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
@@ -88,7 +120,8 @@ export function MoodScreen({ go }: MoodScreenProps) {
       const initIndex = dow === 0 ? 6 : dow - 1
       const dayInit = DAY_INITIALS[initIndex] ?? ''
       const checkin = byDate.get(dateStr) ?? null
-      days.push({ dayInit, date: dateStr, checkin })
+      const count = countByDate.get(dateStr) ?? 0
+      days.push({ dayInit, date: dateStr, checkin, count })
     }
     return days
   })()
@@ -121,6 +154,8 @@ export function MoodScreen({ go }: MoodScreenProps) {
       }
     }
     loadRibbon()
+    loadTodayCount()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
   function resetForm() {
@@ -160,7 +195,11 @@ export function MoodScreen({ go }: MoodScreenProps) {
       }
       setRibbonData((prev) => [...prev, newEntry])
 
+      // Refresh today's count + timeline so the user sees the new entry.
+      await loadTodayCount()
+
       setSaved(true)
+      // Show success briefly, then reset so they can immediately log another.
       setTimeout(() => {
         setSaved(false)
         resetForm()
@@ -236,6 +275,19 @@ export function MoodScreen({ go }: MoodScreenProps) {
         >
           Track how you feel to spot patterns with your food and sleep.
         </p>
+        {todayCount > 0 && (
+          <p
+            style={{
+              fontFamily: 'var(--sans)',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--accent)',
+              margin: '8px 0 0',
+            }}
+          >
+            ✓ You've checked in {todayCount} time{todayCount === 1 ? '' : 's'} today
+          </p>
+        )}
       </div>
 
       {/* 5 Mood buttons */}
@@ -422,6 +474,92 @@ export function MoodScreen({ go }: MoodScreenProps) {
         </button>
       )}
 
+      {/* Today's check-ins timeline */}
+      {todayCheckins.length > 0 && (
+        <div>
+          <Eyebrow style={{ display: 'block', marginBottom: 12 }}>Today's check-ins</Eyebrow>
+          <Card pad="6px 16px">
+            {todayCheckins.map((c, idx) => {
+              const hue = MOOD_HUES[c.mood] ?? 85
+              const emoji = MOOD_EMOJIS[c.mood] ?? ''
+              const intensity = c.intensity ?? 0
+              return (
+                <div
+                  key={`${c.logged_at}-${idx}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '10px 0',
+                    borderTop: idx === 0 ? 'none' : '1px solid var(--line)',
+                  }}
+                >
+                  {/* Emoji bubble */}
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      background: `oklch(0.78 0.09 ${hue} / 0.18)`,
+                      border: `1px solid oklch(0.78 0.09 ${hue} / 0.40)`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 15,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {emoji}
+                  </div>
+                  {/* Mood name */}
+                  <span
+                    style={{
+                      fontFamily: 'var(--sans)',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: 'var(--text)',
+                      flex: 1,
+                    }}
+                  >
+                    {c.mood}
+                  </span>
+                  {/* Intensity dots */}
+                  <div style={{ display: 'flex', gap: 3 }}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <span
+                        key={n}
+                        style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: '50%',
+                          background:
+                            n <= intensity
+                              ? `oklch(0.78 0.09 ${hue})`
+                              : 'var(--line)',
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {/* Time */}
+                  <span
+                    style={{
+                      fontFamily: 'var(--mono)',
+                      fontSize: 12,
+                      color: 'var(--text-dim)',
+                      flexShrink: 0,
+                      minWidth: 62,
+                      textAlign: 'right',
+                    }}
+                  >
+                    {formatTime(c.logged_at)}
+                  </span>
+                </div>
+              )
+            })}
+          </Card>
+        </div>
+      )}
+
       {/* This week's ribbon */}
       <div style={{ paddingBottom: 16 }}>
         <Eyebrow style={{ display: 'block', marginBottom: 12 }}>This Week</Eyebrow>
@@ -432,7 +570,7 @@ export function MoodScreen({ go }: MoodScreenProps) {
         ) : (
           <Card pad="14px 16px">
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              {ribbonDays.map(({ dayInit, date, checkin }, idx) => {
+              {ribbonDays.map(({ dayInit, date, checkin, count }, idx) => {
                 const hue = checkin ? getMoodHue(checkin.mood) : null
                 const emoji = checkin ? getMoodEmoji(checkin.mood) : null
                 return (
@@ -448,6 +586,7 @@ export function MoodScreen({ go }: MoodScreenProps) {
                   >
                     <div
                       style={{
+                        position: 'relative',
                         width: 28,
                         height: 28,
                         borderRadius: '50%',
@@ -463,6 +602,29 @@ export function MoodScreen({ go }: MoodScreenProps) {
                       }}
                     >
                       {emoji ?? ''}
+                      {count > 1 && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: -5,
+                            right: -5,
+                            minWidth: 14,
+                            height: 14,
+                            padding: '0 3px',
+                            boxSizing: 'border-box',
+                            borderRadius: 7,
+                            background: 'var(--accent)',
+                            color: 'var(--on-accent)',
+                            fontFamily: 'var(--mono)',
+                            fontSize: 9,
+                            fontWeight: 700,
+                            lineHeight: '14px',
+                            textAlign: 'center',
+                          }}
+                        >
+                          {count}
+                        </span>
+                      )}
                     </div>
                     <span
                       style={{

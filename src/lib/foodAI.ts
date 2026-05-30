@@ -19,11 +19,18 @@ function normalizeItems(raw: unknown): FoodItem[] {
   })
 }
 
-export async function analyzeFoodImage(base64Image: string): Promise<FoodItem[]> {
+export async function analyzeFoodImage(
+  base64Image: string,
+  context?: { cuisine?: string | null; dietary?: string | null }
+): Promise<FoodItem[]> {
   const res = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64Image }),
+    body: JSON.stringify({
+      image: base64Image,
+      cuisine: context?.cuisine ?? '',
+      dietary: context?.dietary ?? '',
+    }),
   })
   if (!res.ok) throw new Error(`Analyze failed (${res.status})`)
   const data = (await res.json()) as { items?: unknown }

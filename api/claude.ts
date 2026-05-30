@@ -287,6 +287,7 @@ export default async function handler(req: Request): Promise<Response> {
     message: string
     history: Array<{ role: string; text: string }>
     userContext: string
+    personality?: 'warm' | 'direct' | 'clinical'
   }
 
   try {
@@ -298,7 +299,14 @@ export default async function handler(req: Request): Promise<Response> {
     })
   }
 
-  const { message, history = [], userContext = '' } = body
+  const { message, history = [], userContext = '', personality = 'warm' } = body
+
+  const personalityPrefix =
+    personality === 'direct'
+      ? 'Be direct and concise. Skip pleasantries. Give the answer and the action, nothing more.'
+      : personality === 'clinical'
+        ? 'Be precise and evidence-based. Reference specific numbers, macros, and physiological reasoning. Professional but not cold.'
+        : 'Be warm, encouraging, and supportive. Speak like a knowledgeable friend.'
 
   // Verify JWT from Authorization header and extract userId server-side
   const authHeader = req.headers.get('authorization') ?? ''
@@ -316,7 +324,9 @@ export default async function handler(req: Request): Promise<Response> {
   }
   // userId is now verified from JWT — if empty, tool calls will fail gracefully with the existing guard
 
-  const systemPrompt = `You are Sage, a warm and encouraging personal wellness coach built into MindfulBite. You have access to real-time tools to look up the user's actual data.
+  const systemPrompt = `${personalityPrefix}
+
+You are Sage, a personal wellness coach built into MindfulBite. You have access to real-time tools to look up the user's actual data.
 
 IMPORTANT: When users ask about their nutrition, mood, sleep, or patterns — ALWAYS use the appropriate tool to get real data before responding. Don't guess or use the context summary when you can get fresh data with a tool.
 

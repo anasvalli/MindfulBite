@@ -14,6 +14,11 @@ import { InsightsScreen } from './screens/InsightsScreen'
 import { MealPlanScreen } from './screens/MealPlanScreen'
 import { MealScheduleScreen } from './screens/MealScheduleScreen'
 import { HistoryScreen } from './screens/HistoryScreen'
+import { WearablesScreen } from './screens/WearablesScreen'
+import { WaterScreen } from './screens/WaterScreen'
+import { WeightScreen } from './screens/WeightScreen'
+import { CycleScreen } from './screens/CycleScreen'
+import { InstallPrompt } from './components/InstallPrompt'
 import { Spinner } from './components/ui'
 import { IconHome, IconFlame, IconMoon, IconCamera, IconMood, IconGear } from './components/icons'
 
@@ -30,14 +35,18 @@ type Screen =
   | 'plans'
   | 'history'
   | 'mealSchedule'
+  | 'wearables'
+  | 'water'
+  | 'weight'
+  | 'cycle'
 
 const FRAME_W = 402
 const FRAME_H = 874
 
 // Screens where the tab bar is hidden
-const IMMERSIVE: Screen[] = ['capture', 'coach', 'settings', 'plans', 'history', 'mealSchedule']
+const IMMERSIVE: Screen[] = ['capture', 'coach', 'settings', 'plans', 'history', 'mealSchedule', 'wearables', 'water', 'weight', 'cycle']
 // Screens where the inner content gets zero padding (they manage their own)
-const SELF_PADDED: Screen[] = ['capture', 'coach', 'settings', 'plans', 'history', 'mealSchedule']
+const SELF_PADDED: Screen[] = ['capture', 'coach', 'settings', 'plans', 'history', 'mealSchedule', 'wearables', 'water', 'weight', 'cycle']
 
 function useScale() {
   const [k, setK] = useState(1)
@@ -216,6 +225,14 @@ export default function App() {
         return <HistoryScreen go={go} />
       case 'mealSchedule':
         return <MealScheduleScreen go={go} />
+      case 'wearables':
+        return <WearablesScreen go={go} />
+      case 'water':
+        return <WaterScreen go={go} />
+      case 'weight':
+        return <WeightScreen go={go} />
+      case 'cycle':
+        return <CycleScreen go={go} />
       default:
         return <HomeScreen go={go} />
     }
@@ -324,6 +341,7 @@ export default function App() {
           </>
         )}
       </div>
+      {session && <InstallPrompt />}
     </div>
   )
 }

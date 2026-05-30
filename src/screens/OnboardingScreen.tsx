@@ -23,8 +23,10 @@ const ALLERGIES = [
 
 const CUISINES = [
   'South Asian', 'East Asian', 'Southeast Asian', 'Middle Eastern',
-  'Mediterranean', 'African', 'European', 'Latin American',
-  'North American', 'Mixed/Other',
+  'Mediterranean', 'Central Asian', 'African', 'North African',
+  'Caribbean', 'European', 'Eastern European', 'Nordic',
+  'Latin American', 'North American', 'Pacific Islander',
+  'Mixed/Fusion', 'Other',
 ]
 
 const COUNTRIES = [
@@ -915,11 +917,13 @@ interface Step3Props {
   selectedPrefs: string[]
   selectedAllergies: string[]
   cuisine: string
+  customCuisine: string
   country: string
   city: string
   togglePref: (pref: string) => void
   toggleAllergy: (allergy: string) => void
   setCuisine: React.Dispatch<React.SetStateAction<string>>
+  setCustomCuisine: (v: string) => void
   setCountry: (v: string) => void
   setCity: (v: string) => void
   onBack: () => void
@@ -930,11 +934,13 @@ function Step3({
   selectedPrefs,
   selectedAllergies,
   cuisine,
+  customCuisine,
   country,
   city,
   togglePref,
   toggleAllergy,
   setCuisine,
+  setCustomCuisine,
   setCountry,
   setCity,
   onBack,
@@ -997,6 +1003,15 @@ function Step3({
             />
           ))}
         </div>
+        {cuisine === 'Other' && (
+          <input
+            type="text"
+            placeholder="Type your cuisine (e.g. Sri Lankan, Persian)"
+            value={customCuisine}
+            onChange={(e) => setCustomCuisine(e.target.value)}
+            style={{ ...inputStyle, marginTop: 10 }}
+          />
+        )}
         <p
           style={{
             fontFamily: 'var(--sans)',
@@ -1401,6 +1416,7 @@ export function OnboardingScreen({ go }: OnboardingScreenProps) {
   const [selectedPrefs, setSelectedPrefs] = useState<string[]>(['None'])
   const [selectedAllergies, setSelectedAllergies] = useState<string[]>(['None'])
   const [cuisine, setCuisine] = useState('')
+  const [customCuisine, setCustomCuisine] = useState('')
   const [country, setCountry] = useState('')
   const [city, setCity] = useState('')
 
@@ -1535,7 +1551,7 @@ export function OnboardingScreen({ go }: OnboardingScreenProps) {
           daily_calorie_goal: calorieGoal,
           dietary_prefs: selectedPrefs.join(','),
           allergies: selectedAllergies.join(',') || null,
-          cuisine_pref: cuisine || null,
+          cuisine_pref: (cuisine === 'Other' && customCuisine.trim()) ? customCuisine.trim() : (cuisine || null),
           dob: dob || null,
           country: country || null,
           city: city || null,
@@ -1631,11 +1647,13 @@ export function OnboardingScreen({ go }: OnboardingScreenProps) {
             selectedPrefs={selectedPrefs}
             selectedAllergies={selectedAllergies}
             cuisine={cuisine}
+            customCuisine={customCuisine}
             country={country}
             city={city}
             togglePref={togglePref}
             toggleAllergy={toggleAllergy}
             setCuisine={setCuisine}
+            setCustomCuisine={setCustomCuisine}
             setCountry={setCountry}
             setCity={setCity}
             onBack={() => setStep(2)}

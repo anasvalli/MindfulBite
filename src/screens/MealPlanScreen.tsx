@@ -71,6 +71,7 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
 
     const prefs = profile?.dietary_prefs ?? 'None'
     const goal = profile?.daily_calorie_goal ?? 2150
+    const cuisine = profile?.cuisine_pref ?? 'no specific preference'
     const weightGoal =
       profile?.goal_weight && profile?.weight
         ? profile.goal_weight < profile.weight
@@ -80,7 +81,7 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
           : 'maintain weight'
         : 'maintain weight'
 
-    const message = `Generate a 1-day meal plan for me.
+    const message = `Generate a 1-day meal plan for me. My cuisine preference is ${cuisine}. Make all meals authentic to ${cuisine} cuisine.
 My profile: ${prefs} diet, ${goal} kcal daily goal, goal: ${weightGoal}.
 Return ONLY a JSON array, no text before or after:
 [
@@ -98,7 +99,7 @@ Make meals culturally appropriate for my diet preferences. Total should be close
         body: JSON.stringify({
           message,
           history: [],
-          userContext: `User dietary preferences: ${prefs}. Calorie goal: ${goal} kcal.`,
+          userContext: `User dietary preferences: ${prefs}. Calorie goal: ${goal} kcal. Cuisine preference: ${cuisine}.`,
           userId: user?.id,
         }),
       })

@@ -20,6 +20,34 @@ export interface User {
   protein_goal?: number | null
   carbs_goal?: number | null
   fat_goal?: number | null
+  cuisine_pref?: string | null
+  allergies?: string | null
+  dob?: string | null
+  created_at: string
+}
+
+export interface WearableConnection {
+  id: string
+  user_id: string
+  provider: string
+  status: string
+  external_user_id: string | null
+  connected_at: string
+  last_sync: string | null
+}
+
+export interface WearableData {
+  id: string
+  user_id: string
+  date: string
+  source: string | null
+  calories_burned: number | null
+  steps: number | null
+  active_minutes: number | null
+  resting_hr: number | null
+  hrv: number | null
+  sleep_minutes: number | null
+  sleep_quality: number | null
   created_at: string
 }
 

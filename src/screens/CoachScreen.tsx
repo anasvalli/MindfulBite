@@ -27,6 +27,14 @@ const CHIPS = [
   "Help me hit my protein goal",
 ]
 
+type Personality = 'warm' | 'direct' | 'clinical'
+const PERSONALITIES: { id: Personality; label: string }[] = [
+  { id: 'warm', label: 'Warm' },
+  { id: 'direct', label: 'Direct' },
+  { id: 'clinical', label: 'Clinical' },
+]
+const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+
 export function CoachScreen({ go }: CoachScreenProps) {
   const { user, profile } = useAuth()
   const { lang, t } = useLanguage()
@@ -50,6 +58,52 @@ export function CoachScreen({ go }: CoachScreenProps) {
   const [mealMoodCtx, setMealMoodCtx] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Voice input (Web Speech API)
+  const [listening, setListening] = useState(false)
+  const recognitionRef = useRef<any>(null)
+
+  // Sage personality
+  const [personality, setPersonality] = useState<Personality>(
+    () => (localStorage.getItem('coachPersonality') as Personality) || 'warm'
+  )
+  const [personalityMenuOpen, setPersonalityMenuOpen] = useState(false)
+  function selectPersonality(p: Personality) {
+    setPersonality(p)
+    localStorage.setItem('coachPersonality', p)
+    setPersonalityMenuOpen(false)
+  }
+
+  function toggleListening() {
+    if (!SR) return
+    if (listening) {
+      recognitionRef.current?.stop()
+      return
+    }
+    try {
+      const rec = new SR()
+      rec.lang = lang === 'en' ? 'en-US' : lang
+      rec.interimResults = false
+      rec.maxAlternatives = 1
+      rec.onresult = (e: any) => {
+        const transcript = e.results?.[0]?.[0]?.transcript ?? ''
+        if (transcript) setInput(transcript)
+      }
+      rec.onend = () => setListening(false)
+      rec.onerror = () => setListening(false)
+      recognitionRef.current = rec
+      rec.start()
+      setListening(true)
+    } catch {
+      setListening(false)
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      try { recognitionRef.current?.stop() } catch { /* ignore */ }
+    }
+  }, [])
 
   const tier = profile?.subscription_tier ?? 'Basic'
 
@@ -174,7 +228,7 @@ export function CoachScreen({ go }: CoachScreenProps) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token ?? ''}`,
         },
-        body: JSON.stringify({ message: text.trim(), history, userContext: combinedContext }),
+        body: JSON.stringify({ message: text.trim(), history, userContext: combinedContext, personality }),
       })
       if (!res.ok) throw new Error(`API error ${res.status}`)
       const data = await res.json() as { reply: string }
@@ -269,6 +323,66 @@ export function CoachScreen({ go }: CoachScreenProps) {
           {!isMoodChat && tier !== 'Premium' && (
             <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>
               {remainingChats(tier) === Infinity ? '' : `${remainingChats(tier)} chats left today`}
+            </div>
+          )}
+        </div>
+
+        {/* Personality picker */}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            onClick={() => setPersonalityMenuOpen((o) => !o)}
+            style={{
+              background: 'var(--accent-wash)',
+              border: '1px solid var(--accent-line)',
+              borderRadius: 100,
+              padding: '6px 12px',
+              color: 'var(--text-muted)',
+              fontSize: 12,
+              fontFamily: 'var(--sans)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Tone: {PERSONALITIES.find((p) => p.id === personality)?.label}
+          </button>
+          {personalityMenuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                right: 0,
+                background: 'var(--surface)',
+                border: '1px solid var(--line)',
+                borderRadius: 14,
+                padding: 6,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                zIndex: 20,
+                minWidth: 120,
+                boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
+              }}
+            >
+              {PERSONALITIES.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => selectPersonality(p.id)}
+                  style={{
+                    background: p.id === personality ? 'var(--accent-wash)' : 'none',
+                    border: 'none',
+                    borderRadius: 10,
+                    padding: '8px 12px',
+                    color: p.id === personality ? 'var(--text)' : 'var(--text-muted)',
+                    fontSize: 13,
+                    fontFamily: 'var(--sans)',
+                    fontWeight: p.id === personality ? 600 : 400,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -448,6 +562,33 @@ export function CoachScreen({ go }: CoachScreenProps) {
             outline: 'none',
           }}
         />
+        {SR && (
+          <button
+            onClick={toggleListening}
+            aria-label={listening ? 'Stop listening' : 'Start voice input'}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              background: listening ? 'var(--accent)' : 'var(--surface)',
+              border: `1px solid ${listening ? 'var(--accent-line)' : 'var(--line)'}`,
+              color: listening ? 'var(--on-accent)' : 'var(--text-muted)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              flexShrink: 0,
+              animation: listening ? 'mb-pulse 1.2s ease-in-out infinite' : undefined,
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="2" width="6" height="12" rx="3" />
+              <path d="M5 10v1a7 7 0 0 0 14 0v-1" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+            </svg>
+          </button>
+        )}
         <button
           onClick={() => sendMessage(input)}
           disabled={!input.trim() || isThinking}

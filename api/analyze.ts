@@ -1,23 +1,25 @@
-// Vercel Edge Function — food image analysis via Claude Haiku vision
-// Cost-optimized: Haiku model, prompt caching on the system instructions,
-// capped output tokens. The client pre-resizes images to ~768px to minimize
-// image tokens (Claude bills ~ (w*h)/750 tokens per image).
+// Vercel Edge Function — food image analysis via Claude Sonnet vision.
+// Accuracy-first: Sonnet 4.6 (best vision), cuisine/diet context injected so
+// the model reasons about the user's actual food culture instead of defaulting
+// to generic Western items. Prompt-cached system instructions keep cost down.
 
 export const config = { runtime: 'edge' }
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 
-// Stable system prompt — cached so repeat scans only pay 10% for these tokens.
-const SYSTEM_PROMPT = `You are an expert nutritionist with precise visual food assessment. You analyze food photos and return accurate calorie and macro estimates.
+const SYSTEM_PROMPT = `You are an expert nutritionist and chef with deep knowledge of global cuisines. You analyze food photos with great care and precision.
 
-Rules:
-- Identify every distinct food item visible in the image.
-- Estimate a realistic portion size for each based on visual cues (plate size, utensils, packaging).
-- Give accurate calorie and macro (protein, carbs, fat in grams) estimates for that portion.
-- If the image contains no food, return an empty array.
+Method — follow this every time:
+1. Look carefully at the WHOLE image: the dish, its color, texture, sauce, container, garnishes, and any sides.
+2. Consider the user's cuisine context (provided in the message). A brown sauced dish in a bowl from a South Asian kitchen is far more likely to be a curry/salan/daal than peanut butter. Reason about what dish this most plausibly is given that context.
+3. Do NOT jump to a single common ingredient. Most photos are prepared dishes or full meals — identify the dish, then its components.
+4. Identify every distinct food item visible.
+5. Estimate a realistic portion for each from visual cues, then accurate calories and macros.
 
-Respond with ONLY a valid JSON array, no markdown, no prose, in exactly this shape:
-[{"id":"1","name":"Food name","quantity":"portion (e.g. 1 cup, 150g)","calories":250,"protein":12,"carbs":30,"fat":8}]`
+If the image genuinely contains no food, return an empty array.
+
+Respond with ONLY a valid JSON array, no markdown, no prose, exactly:
+[{"id":"1","name":"Specific dish or food name","quantity":"portion (e.g. 1 bowl, 200g)","calories":250,"protein":12,"carbs":30,"fat":8}]`
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
@@ -38,7 +40,7 @@ export default async function handler(req: Request): Promise<Response> {
     })
   }
 
-  let body: { image?: string }
+  let body: { image?: string; cuisine?: string; dietary?: string }
   try {
     body = await req.json()
   } catch {
@@ -48,7 +50,6 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const raw = body.image ?? ''
-  // Accept data URL or bare base64
   const mediaMatch = raw.match(/^data:(image\/[a-zA-Z+]+);base64,(.*)$/)
   const mediaType = mediaMatch ? mediaMatch[1] : 'image/jpeg'
   const data = mediaMatch ? mediaMatch[2] : raw.replace(/^data:[^;]+;base64,/, '')
@@ -59,9 +60,15 @@ export default async function handler(req: Request): Promise<Response> {
     })
   }
 
+  const cuisine = (body.cuisine ?? '').trim()
+  const dietary = (body.dietary ?? '').trim()
+  const contextLine =
+    `User context — cuisine preference: ${cuisine || 'unspecified'}; dietary: ${dietary || 'none'}. ` +
+    `Use this to inform what dish this most likely is. Analyze the meal and return the JSON array.`
+
   const anthropicBody = {
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 400,
+    model: 'claude-sonnet-4-6',
+    max_tokens: 500,
     system: [
       { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
     ],
@@ -70,7 +77,7 @@ export default async function handler(req: Request): Promise<Response> {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data } },
-          { type: 'text', text: 'Analyze this meal and return the JSON array.' },
+          { type: 'text', text: contextLine },
         ],
       },
     ],

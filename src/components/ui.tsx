@@ -1,4 +1,107 @@
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+
+// ─── CountUp ──────────────────────────────────────────────────────────────────
+interface CountUpProps {
+  value: number
+  duration?: number
+  decimals?: number
+  className?: string
+  style?: React.CSSProperties
+}
+
+export function CountUp({ value, duration = 900, decimals = 0, className, style }: CountUpProps) {
+  const [display, setDisplay] = useState(0)
+  const rafRef = useRef<number | null>(null)
+  const fromRef = useRef(0)
+
+  useEffect(() => {
+    const from = fromRef.current
+    const to = value
+    const start = performance.now()
+    // ease-out cubic
+    const ease = (t: number) => 1 - Math.pow(1 - t, 3)
+
+    const tick = (now: number) => {
+      const elapsed = now - start
+      const t = duration > 0 ? Math.min(1, elapsed / duration) : 1
+      const current = from + (to - from) * ease(t)
+      setDisplay(current)
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick)
+      } else {
+        setDisplay(to)
+        fromRef.current = to
+      }
+    }
+
+    rafRef.current = requestAnimationFrame(tick)
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current)
+      fromRef.current = value
+    }
+  }, [value, duration])
+
+  const formatted =
+    decimals > 0
+      ? display.toFixed(decimals)
+      : Math.round(display).toLocaleString()
+
+  return (
+    <span className={className} style={style}>
+      {formatted}
+    </span>
+  )
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+interface SkeletonProps {
+  width?: number | string
+  height?: number
+  radius?: number
+  style?: React.CSSProperties
+}
+
+export function Skeleton({ width = '100%', height = 16, radius = 8, style }: SkeletonProps) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        borderRadius: radius,
+        background:
+          'linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%)',
+        backgroundSize: '200% 100%',
+        animation: 'mb-shimmer 1.4s ease-in-out infinite',
+        flexShrink: 0,
+        ...style,
+      }}
+    />
+  )
+}
+
+// ─── SkeletonCard ─────────────────────────────────────────────────────────────
+export function SkeletonCard({ style }: { style?: React.CSSProperties }) {
+  return (
+    <div
+      style={{
+        background: 'var(--surface)',
+        borderRadius: 22,
+        border: '1px solid var(--line)',
+        boxShadow: 'var(--card-shadow)',
+        padding: 18,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        ...style,
+      }}
+    >
+      <Skeleton width="40%" height={12} />
+      <Skeleton width="70%" height={20} />
+      <Skeleton width="100%" height={64} radius={14} />
+      <Skeleton width="55%" height={12} />
+    </div>
+  )
+}
 
 // ─── Ring ────────────────────────────────────────────────────────────────────
 interface RingProps {

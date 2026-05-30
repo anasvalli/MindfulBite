@@ -180,3 +180,41 @@ input[type='range']::-moz-range-thumb {
     opacity: 0.25;
   }
 }
+
+/* Animation: shimmer sweep for skeleton loaders */
+@keyframes mb-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Animation: pop in with slight overshoot for success/milestone moments */
+@keyframes mb-pop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.mb-pop {
+  animation: mb-pop 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Utility: tactile press feedback for buttons */
+.mb-press {
+  transition: transform 0.12s ease;
+}
+.mb-press:active {
+  transform: scale(0.96);
+}

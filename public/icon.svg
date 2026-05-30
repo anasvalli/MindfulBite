@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#1A1714"/>
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#D9B779" stroke-width="14"/>
+  <g fill="#D9B779">
+    <!-- Leaf body -->
+    <path d="M256 110
+             C160 150 150 290 256 402
+             C362 290 352 150 256 110 Z"/>
+  </g>
+  <!-- Leaf midrib + veins drawn in background color for contrast -->
+  <g stroke="#1A1714" stroke-width="10" stroke-linecap="round" fill="none">
+    <path d="M256 140 L256 380"/>
+    <path d="M256 215 L210 180"/>
+    <path d="M256 215 L302 180"/>
+    <path d="M256 275 L205 240"/>
+    <path d="M256 275 L307 240"/>
+    <path d="M256 335 L212 305"/>
+    <path d="M256 335 L300 305"/>
+  </g>
+</svg>

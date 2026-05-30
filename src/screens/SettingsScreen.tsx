@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { useTheme } from '../contexts/ThemeContext'
+import { useTheme, ACCENTS } from '../contexts/ThemeContext'
 import { useLanguage, LANGUAGES } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import { Card, Eyebrow, Spinner } from '../components/ui'
@@ -64,7 +64,7 @@ const DIETARY_PREFS = [
 
 export function SettingsScreen({ go }: SettingsScreenProps) {
   const { profile, user, signOut, refreshProfile } = useAuth()
-  const { mode, setMode } = useTheme()
+  const { mode, setMode, accent, setAccent } = useTheme()
   const { lang, setLang, t } = useLanguage()
   const [langSheetOpen, setLangSheetOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
@@ -303,6 +303,14 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
       rawValue: profile?.height != null ? String(profile.height) : '',
       displayValue: profile?.height ? `${profile.height} cm` : 'Not set',
       editable: true,
+      type: 'number',
+    },
+    {
+      key: 'cuisine_pref',
+      label: 'Cuisine',
+      rawValue: '',
+      displayValue: profile?.cuisine_pref ?? 'Not set',
+      editable: false,
       type: 'number',
     },
     {
@@ -595,6 +603,25 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
               </div>
             </div>
           </Card>
+
+          {/* Connect Wearable */}
+          <Card pad={0} style={{ marginTop: 10 }}>
+            <div
+              onClick={() => go('wearables')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 18px',
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{ fontSize: 14.5, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                ⌚ Connect Wearable
+              </span>
+              <span style={{ color: 'var(--text-dim)' }}><IconChevR size={14} /></span>
+            </div>
+          </Card>
         </div>
 
         {/* App */}
@@ -625,6 +652,30 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                   >
                     {m}
                   </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Accent color */}
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line)' }}>
+              <div style={{ fontSize: 14.5, color: 'var(--text)', marginBottom: 10 }}>Accent color</div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                {ACCENTS.map((a) => (
+                  <button
+                    key={a.key}
+                    onClick={() => setAccent(a.key as 'gold' | 'sage' | 'azure' | 'clay')}
+                    aria-label={a.label}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 999,
+                      background: a.swatch,
+                      border: accent === a.key ? '2px solid var(--text)' : '2px solid transparent',
+                      outline: accent === a.key ? '1px solid var(--line)' : 'none',
+                      outlineOffset: 2,
+                      cursor: 'pointer',
+                    }}
+                  />
                 ))}
               </div>
             </div>

@@ -6,6 +6,9 @@ import type { Meal, MealMood } from '../types'
 import { Ring, Card, Eyebrow, Spinner, MacroBar } from '../components/ui'
 import { IconFlame, IconMoon, IconMood, IconChevR, IconTrend } from '../components/icons'
 import { parseTime12h } from '../lib/time'
+import { computeStreak } from '../lib/streaks'
+import { StreakBadge } from '../components/StreakBadge'
+import { WeeklyRecap } from '../components/WeeklyRecap'
 
 interface HomeScreenProps {
   go: (screen: string) => void
@@ -46,6 +49,8 @@ export function HomeScreen({ go }: HomeScreenProps) {
   const [loading, setLoading] = useState(true)
   const [animProgress, setAnimProgress] = useState(0)
   const [nextMeal, setNextMeal] = useState<{ meal: PlanMeal; secondsLeft: number } | null>(null)
+  const [streak, setStreak] = useState(0)
+  const [showRecap, setShowRecap] = useState(false)
 
   const goal = profile?.daily_calorie_goal ?? 2150
   const eaten = meals.reduce((s, m) => s + (m.total_calories ?? 0), 0)
@@ -84,6 +89,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
         ])
 
         if (mealsRes.status === 'fulfilled' && mealsRes.value.data) setMeals(mealsRes.value.data as Meal[])
+        computeStreak(uid).then((s) => setStreak(s.current)).catch(() => {})
         if (moodsRes.status === 'fulfilled' && moodsRes.value.data && moodsRes.value.data.length > 0) {
           // mood_checkins uses logged_at and mood field — map to MealMood shape for display
           const row = moodsRes.value.data[0] as { mood: string; logged_at: string }
@@ -160,20 +166,27 @@ export function HomeScreen({ go }: HomeScreenProps) {
       }}
     >
       {/* Greeting */}
-      <div>
-        <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 2 }}>{todayLabel()}</p>
-        <h1
-          style={{
-            fontFamily: 'var(--serif)',
-            fontSize: 26,
-            fontWeight: 500,
-            letterSpacing: '-0.01em',
-            color: 'var(--text)',
-          }}
-        >
-          {t(greetingKey())}, {firstName}
-        </h1>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+        <div>
+          <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 2 }}>{todayLabel()}</p>
+          <h1
+            style={{
+              fontFamily: 'var(--serif)',
+              fontSize: 26,
+              fontWeight: 500,
+              letterSpacing: '-0.01em',
+              color: 'var(--text)',
+            }}
+          >
+            {t(greetingKey())}, {firstName}
+          </h1>
+        </div>
+        <div onClick={() => setShowRecap(true)} style={{ cursor: 'pointer', flexShrink: 0, marginTop: 2 }}>
+          <StreakBadge current={streak} />
+        </div>
       </div>
+
+      {showRecap && user && <WeeklyRecap userId={user.id} onClose={() => setShowRecap(false)} />}
 
       {/* Next Meal countdown */}
       {nextMeal && (
@@ -402,6 +415,36 @@ export function HomeScreen({ go }: HomeScreenProps) {
       >
         View your weekly insights <IconTrend size={14} />
       </button>
+
+      {/* Quick track row */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        {[
+          { key: 'water', emoji: '💧', label: 'Water' },
+          { key: 'weight', emoji: '⚖️', label: 'Weight' },
+          { key: 'cycle', emoji: '🌙', label: 'Cycle' },
+        ].map((q) => (
+          <button
+            key={q.key}
+            onClick={() => go(q.key)}
+            className="mb-press"
+            style={{
+              flex: 1,
+              background: 'var(--surface)',
+              border: '1px solid var(--line)',
+              borderRadius: 14,
+              padding: '12px 0',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <span style={{ fontSize: 18 }}>{q.emoji}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--sans)', fontWeight: 600 }}>{q.label}</span>
+          </button>
+        ))}
+      </div>
 
       {/* Recent Meals */}
       {recentMeals.length > 0 && (
