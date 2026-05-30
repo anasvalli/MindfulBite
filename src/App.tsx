@@ -48,10 +48,14 @@ const IMMERSIVE: Screen[] = ['capture', 'coach', 'settings', 'plans', 'history',
 // Screens where the inner content gets zero padding (they manage their own)
 const SELF_PADDED: Screen[] = ['capture', 'coach', 'settings', 'plans', 'history', 'mealSchedule', 'wearables', 'water', 'weight', 'cycle']
 
-// Device mode: on a real phone (narrow viewport) the app fills the screen edge to
-// edge and respects safe-area insets (notch / punch-hole / gesture bar). On a wide
-// desktop viewport we show a centered phone-sized preview frame. Foldables that
-// unfold to a wide width get the framed view; folded/narrow get full-screen.
+// Device mode:
+//  - Real touch devices (phones AND foldables/tablets) → full-screen. Content is
+//    capped to a comfortable centered column (CONTENT_MAX) so a wide unfolded
+//    foldable fills the screen without stretching cards awkwardly.
+//  - Desktop (mouse/fine pointer, wide) → centered phone-sized preview frame.
+//  Respects safe-area insets (notch / punch-hole / gesture bar) in full-screen.
+const CONTENT_MAX = 600
+
 function useDeviceMode() {
   const [state, setState] = useState(() => computeDeviceMode())
   useEffect(() => {
@@ -61,22 +65,33 @@ function useDeviceMode() {
     update()
     window.addEventListener('resize', update)
     window.addEventListener('orientationchange', update)
+    const mq = window.matchMedia('(pointer: coarse)')
+    mq.addEventListener?.('change', update)
     return () => {
       window.removeEventListener('resize', update)
       window.removeEventListener('orientationchange', update)
+      mq.removeEventListener?.('change', update)
     }
   }, [])
   return state
 }
 
-function computeDeviceMode(): { fullScreen: boolean; scale: number } {
+function computeDeviceMode(): { fullScreen: boolean; scale: number; columned: boolean } {
   const w = window.innerWidth
   const h = window.innerHeight
-  // Treat anything <= 600px wide as a real phone → full-screen, edge to edge.
-  if (w <= 600) return { fullScreen: true, scale: 1 }
-  // Wider (desktop, tablet, unfolded foldable) → centered framed preview, scaled to fit height.
+  // Touch device (phone, foldable, tablet) OR narrow viewport → full-screen.
+  const isTouch =
+    window.matchMedia('(pointer: coarse)').matches ||
+    window.matchMedia('(hover: none)').matches ||
+    'ontouchstart' in window
+  if (isTouch || w <= 600) {
+    // columned = the content column is narrower than the screen (wide foldable/tablet),
+    // so we frame it with side borders. On a phone it fills edge to edge.
+    return { fullScreen: true, scale: 1, columned: w > CONTENT_MAX }
+  }
+  // Desktop with a mouse on a wide screen → centered phone-sized preview frame.
   const scale = Math.min((h - 32) / FRAME_H, 1)
-  return { fullScreen: false, scale }
+  return { fullScreen: false, scale, columned: false }
 }
 
 interface TabBarProps {
@@ -191,7 +206,7 @@ export default function App() {
   const { loading, session, profile } = useAuth()
   const [screen, setScreen] = useState<Screen>('home')
   const [screenKey, setScreenKey] = useState(0)
-  const { fullScreen, scale } = useDeviceMode()
+  const { fullScreen, scale, columned } = useDeviceMode()
 
   const go = useCallback((s: string) => {
     setScreen(s as Screen)
@@ -269,18 +284,26 @@ export default function App() {
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
+        // On touch devices the app bg fills the whole screen (incl. the sides of a
+        // wide unfolded foldable around the centered content column).
+        background: fullScreen ? 'var(--bg)' : undefined,
       }}
     >
-      {/* App surface — full-screen on real phones, centered preview frame on desktop */}
+      {/* App surface — full-screen on phones/foldables (content capped to a centered
+          column), centered preview frame on desktop. */}
       <div
         style={
           fullScreen
             ? {
                 width: '100%',
+                maxWidth: CONTENT_MAX,
                 height: '100dvh',
                 position: 'relative',
                 overflow: 'hidden',
                 background: 'var(--bg)',
+                // Subtle separators so the column reads as intentional on wide foldables
+                borderLeft: columned ? '1px solid var(--line)' : 'none',
+                borderRight: columned ? '1px solid var(--line)' : 'none',
               }
             : {
                 width: FRAME_W,
