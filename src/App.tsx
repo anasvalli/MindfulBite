@@ -20,7 +20,7 @@ import { WeightScreen } from './screens/WeightScreen'
 import { CycleScreen } from './screens/CycleScreen'
 import { InstallPrompt } from './components/InstallPrompt'
 import { Spinner } from './components/ui'
-import { IconHome, IconFlame, IconMoon, IconCamera, IconMood, IconGear } from './components/icons'
+import { IconHome, IconFlame, IconMoon, IconCamera, IconMood } from './components/icons'
 
 type Screen =
   | 'auth'
@@ -330,31 +330,6 @@ export default function App() {
 
             {/* Tab bar */}
             {showTabBar && <TabBar screen={screen} go={go} />}
-
-            {/* Settings button (floating, when signed in, not on immersive screens, not during onboarding) */}
-            {session && !IMMERSIVE.includes(screen) && !isOnboarding && (
-              <button
-                onClick={() => go('settings')}
-                style={{
-                  position: 'absolute',
-                  top: 'max(env(safe-area-inset-top, 0px) + 12px, 46px)',
-                  right: 18,
-                  width: 36,
-                  height: 36,
-                  borderRadius: 12,
-                  background: 'var(--surface)',
-                  border: '1px solid var(--line)',
-                  color: 'var(--text-muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  zIndex: 40,
-                }}
-              >
-                <IconGear size={18} />
-              </button>
-            )}
           </>
         )}
       </div>

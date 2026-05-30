@@ -4,7 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import type { Meal, MealMood } from '../types'
 import { Ring, Card, Eyebrow, MacroBar, CountUp, Skeleton, SkeletonCard } from '../components/ui'
-import { IconFlame, IconMoon, IconMood, IconChevR, IconTrend } from '../components/icons'
+import { IconFlame, IconMoon, IconMood, IconChevR, IconTrend, IconGear } from '../components/icons'
 import { parseTime12h } from '../lib/time'
 import { computeStreak } from '../lib/streaks'
 import { StreakBadge } from '../components/StreakBadge'
@@ -187,8 +187,30 @@ export function HomeScreen({ go }: HomeScreenProps) {
             {t(greetingKey())}, {firstName}
           </h1>
         </div>
-        <div onClick={() => setShowRecap(true)} style={{ cursor: 'pointer', flexShrink: 0, marginTop: 2 }}>
-          <StreakBadge current={streak} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginTop: 2 }}>
+          <div onClick={() => setShowRecap(true)} style={{ cursor: 'pointer' }}>
+            <StreakBadge current={streak} />
+          </div>
+          <button
+            onClick={() => go('settings')}
+            aria-label="Settings"
+            className="mb-press"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              background: 'var(--surface)',
+              border: '1px solid var(--line)',
+              color: 'var(--text-muted)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <IconGear size={18} />
+          </button>
         </div>
       </div>
 
