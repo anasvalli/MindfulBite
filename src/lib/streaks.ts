@@ -91,19 +91,3 @@ export async function computeStreak(userId: string): Promise<StreakResult> {
 
   return { current, best, daysThisWeek }
 }
-
-/**
- * Returns a celebratory milestone label when `streak` hits a milestone day,
- * otherwise null.
- */
-export function milestoneFor(streak: number): string | null {
-  const milestones: Record<number, string> = {
-    3: '🔥 3-day streak!',
-    7: '🔥 7-day streak!',
-    14: '🔥 14-day streak!',
-    30: '🔥 30-day streak!',
-    60: '🔥 60-day streak!',
-    100: '🔥 100-day streak!',
-  }
-  return milestones[streak] ?? null
-}

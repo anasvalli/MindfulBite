@@ -48,19 +48,35 @@ const IMMERSIVE: Screen[] = ['capture', 'coach', 'settings', 'plans', 'history',
 // Screens where the inner content gets zero padding (they manage their own)
 const SELF_PADDED: Screen[] = ['capture', 'coach', 'settings', 'plans', 'history', 'mealSchedule', 'wearables', 'water', 'weight', 'cycle']
 
-function useScale() {
-  const [k, setK] = useState(1)
+// Device mode: on a real phone (narrow viewport) the app fills the screen edge to
+// edge and respects safe-area insets (notch / punch-hole / gesture bar). On a wide
+// desktop viewport we show a centered phone-sized preview frame. Foldables that
+// unfold to a wide width get the framed view; folded/narrow get full-screen.
+function useDeviceMode() {
+  const [state, setState] = useState(() => computeDeviceMode())
   useEffect(() => {
     function update() {
-      const kw = (window.innerWidth - 32) / FRAME_W
-      const kh = (window.innerHeight - 32) / FRAME_H
-      setK(Math.min(kw, kh, 1))
+      setState(computeDeviceMode())
     }
     update()
     window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
+    window.addEventListener('orientationchange', update)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('orientationchange', update)
+    }
   }, [])
-  return k
+  return state
+}
+
+function computeDeviceMode(): { fullScreen: boolean; scale: number } {
+  const w = window.innerWidth
+  const h = window.innerHeight
+  // Treat anything <= 600px wide as a real phone → full-screen, edge to edge.
+  if (w <= 600) return { fullScreen: true, scale: 1 }
+  // Wider (desktop, tablet, unfolded foldable) → centered framed preview, scaled to fit height.
+  const scale = Math.min((h - 32) / FRAME_H, 1)
+  return { fullScreen: false, scale }
 }
 
 interface TabBarProps {
@@ -87,11 +103,12 @@ function TabBar({ screen, go }: TabBarProps) {
         bottom: 0,
         left: 0,
         right: 0,
-        height: 88,
         background: 'linear-gradient(to top, var(--bg) 60%, transparent)',
         display: 'flex',
         alignItems: 'center',
-        paddingBottom: 16,
+        // Respect the device's bottom gesture bar / home indicator
+        paddingTop: 8,
+        paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
         zIndex: 30,
       }}
     >
@@ -174,7 +191,7 @@ export default function App() {
   const { loading, session, profile } = useAuth()
   const [screen, setScreen] = useState<Screen>('home')
   const [screenKey, setScreenKey] = useState(0)
-  const scale = useScale()
+  const { fullScreen, scale } = useDeviceMode()
 
   const go = useCallback((s: string) => {
     setScreen(s as Screen)
@@ -195,7 +212,12 @@ export default function App() {
   const isOnboarding = !!session && !!profile && !profile.onboarding_complete
   const showTabBar = !IMMERSIVE.includes(screen) && !!session && !isOnboarding
   const selfPadded = SELF_PADDED.includes(screen) || !session || isOnboarding
-  const innerPadding = selfPadded ? 0 : `58px 20px ${showTabBar ? 104 : 20}px`
+  // Top padding clears the status bar / notch / punch-hole (env safe-area on devices
+  // that report it, with a sensible floor for Android). Bottom clears the tab bar +
+  // gesture bar.
+  const innerPadding = selfPadded
+    ? 0
+    : `max(env(safe-area-inset-top, 0px) + 18px, 52px) 20px ${showTabBar ? 'calc(96px + env(safe-area-inset-bottom, 0px))' : 'max(20px, env(safe-area-inset-bottom, 0px))'}`
 
   function renderScreen() {
     if (!session) return <AuthScreen go={go} />
@@ -241,44 +263,39 @@ export default function App() {
   return (
     <div
       style={{
-        width: '100vw',
-        height: '100vh',
+        width: '100%',
+        height: '100dvh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
       }}
     >
-      {/* Device frame */}
+      {/* App surface — full-screen on real phones, centered preview frame on desktop */}
       <div
-        style={{
-          width: FRAME_W,
-          height: FRAME_H,
-          borderRadius: 48,
-          overflow: 'hidden',
-          boxShadow: '0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)',
-          position: 'relative',
-          transform: `scale(${scale})`,
-          transformOrigin: 'center center',
-          background: 'var(--bg)',
-          flexShrink: 0,
-        }}
+        style={
+          fullScreen
+            ? {
+                width: '100%',
+                height: '100dvh',
+                position: 'relative',
+                overflow: 'hidden',
+                background: 'var(--bg)',
+              }
+            : {
+                width: FRAME_W,
+                height: FRAME_H,
+                borderRadius: 44,
+                overflow: 'hidden',
+                boxShadow: '0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)',
+                position: 'relative',
+                transform: `scale(${scale})`,
+                transformOrigin: 'center center',
+                background: 'var(--bg)',
+                flexShrink: 0,
+              }
+        }
       >
-        {/* Dynamic Island */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 11,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 126,
-            height: 37,
-            borderRadius: 24,
-            background: '#000',
-            zIndex: 50,
-          }}
-        />
-
         {/* Global loading */}
         {loading ? (
           <div
@@ -320,7 +337,7 @@ export default function App() {
                 onClick={() => go('settings')}
                 style={{
                   position: 'absolute',
-                  top: 52,
+                  top: 'max(env(safe-area-inset-top, 0px) + 12px, 46px)',
                   right: 18,
                   width: 36,
                   height: 36,

@@ -47,6 +47,10 @@ body {
   overflow: hidden;
 }
 
+#root {
+  height: 100%;
+}
+
 body {
   background: radial-gradient(ellipse at 50% 40%, oklch(0.22 0.015 75) 0%, oklch(0.10 0.005 75) 100%);
   color: var(--text);
@@ -55,6 +59,15 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Prevent pull-to-refresh / overscroll bounce so it feels app-like */
+  overscroll-behavior: none;
+}
+
+/* On a real phone, the body background should match the app (no letterbox) */
+@media (max-width: 600px) {
+  body {
+    background: var(--bg);
+  }
 }
 
 input::placeholder {

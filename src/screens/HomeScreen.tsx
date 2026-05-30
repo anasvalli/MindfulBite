@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import type { Meal, MealMood } from '../types'
-import { Ring, Card, Eyebrow, Spinner, MacroBar } from '../components/ui'
+import { Ring, Card, Eyebrow, MacroBar, CountUp, Skeleton, SkeletonCard } from '../components/ui'
 import { IconFlame, IconMoon, IconMood, IconChevR, IconTrend } from '../components/icons'
 import { parseTime12h } from '../lib/time'
 import { computeStreak } from '../lib/streaks'
@@ -144,8 +144,14 @@ export function HomeScreen({ go }: HomeScreenProps) {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <Spinner />
+      <div className="mb-screen" style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 8 }}>
+        <Skeleton width="55%" height={28} />
+        <SkeletonCard />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <SkeletonCard style={{ flex: 1 }} />
+          <SkeletonCard style={{ flex: 1 }} />
+        </div>
+        <SkeletonCard />
       </div>
     )
   }
@@ -231,7 +237,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
                   lineHeight: 1,
                 }}
               >
-                {Math.round(eaten)}
+                <CountUp value={Math.round(eaten)} />
               </div>
               <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--mono)', marginTop: 2 }}>
                 kcal eaten
