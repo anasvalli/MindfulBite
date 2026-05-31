@@ -59,6 +59,11 @@ export interface FoodItem {
   protein: number
   carbs: number
   fat: number
+  // Robust-analysis fields (optional — set by the analysis pipeline)
+  grams?: number              // estimated weight, used to scale verified DB macros
+  confidence?: number         // 0..1 identification confidence
+  alternatives?: string[]     // other likely dishes the user can switch to
+  source?: 'usda' | 'estimate' // where the macros came from
 }
 
 export interface Meal {

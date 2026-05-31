@@ -138,6 +138,36 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
   // user corrections and feed them back into future analyses.
   const editOriginalRef = useRef<FoodItem | null>(null)
 
+  // Portion adjuster (result step): per-item base macros + current multiplier so
+  // ½×/1×/1½×/2× always scale from the original detection (no compounding).
+  const portionBaseRef = useRef<Record<string, { cal: number; p: number; c: number; f: number }>>({})
+  const [portionFactor, setPortionFactor] = useState<Record<string, number>>({})
+
+  function setPortion(item: FoodItem, factor: number) {
+    if (!portionBaseRef.current[item.id]) {
+      portionBaseRef.current[item.id] = { cal: item.calories, p: item.protein, c: item.carbs, f: item.fat }
+    }
+    const b = portionBaseRef.current[item.id]
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === item.id
+          ? { ...it, calories: Math.round(b.cal * factor), protein: Math.round(b.p * factor), carbs: Math.round(b.c * factor), fat: Math.round(b.f * factor) }
+          : it,
+      ),
+    )
+    setPortionFactor((prev) => ({ ...prev, [item.id]: factor }))
+  }
+
+  function switchAlternative(item: FoodItem, alt: string) {
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === item.id
+          ? { ...it, name: alt, confidence: 0.9, alternatives: [item.name, ...(it.alternatives ?? []).filter((a) => a !== alt)].slice(0, 2) }
+          : it,
+      ),
+    )
+  }
+
   // Sage healthier-swap suggestion (result step)
   const [swapText, setSwapText] = useState<string | null>(null)
   const [swapLoading, setSwapLoading] = useState(false)
@@ -1813,50 +1843,74 @@ Accurate nutritional estimates for typical local portion sizes.`,
                   </Card>
                 ) : (
                   /* ── Row view ── */
-                  <Card
-                    key={item.id}
-                    pad="14px 16px"
-                    onClick={() => startEdit(item)}
-                    style={{ cursor: 'pointer' }}
-                  >
+                  <Card key={item.id} pad="14px 16px">
                     <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                      }}
+                      onClick={() => startEdit(item)}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', cursor: 'pointer' }}
                     >
-                      <div>
-                        <p
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 500,
-                            color: 'var(--text)',
-                            marginBottom: 4,
-                          }}
-                        >
-                          {item.name}
-                        </p>
+                      <div style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>{item.name}</span>
+                          {item.source === 'usda' && (
+                            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', color: 'oklch(0.74 0.14 150)', background: 'oklch(0.74 0.14 150 / 0.14)', borderRadius: 6, padding: '2px 6px' }}>
+                              ✓ VERIFIED
+                            </span>
+                          )}
+                          {typeof item.confidence === 'number' && item.confidence < 0.7 && (
+                            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--warn, oklch(0.78 0.12 70))', background: 'oklch(0.78 0.12 70 / 0.14)', borderRadius: 6, padding: '2px 6px' }}>
+                              {Math.round(item.confidence * 100)}%
+                            </span>
+                          )}
+                        </div>
                         <p style={{ fontSize: 12, color: 'var(--text-dim)' }}>{item.quantity}</p>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            letterSpacing: '0.10em',
-                            textTransform: 'uppercase',
-                            color: 'var(--accent)',
-                            fontFamily: 'var(--sans)',
-                          }}
-                        >
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--accent)', fontFamily: 'var(--sans)' }}>
                           {item.calories} kcal
                         </span>
                         <p style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
-                          P{Math.round(item.protein)} · C{Math.round(item.carbs)} · F
-                          {Math.round(item.fat)}
+                          P{Math.round(item.protein)} · C{Math.round(item.carbs)} · F{Math.round(item.fat)}
                         </p>
                       </div>
+                    </div>
+
+                    {/* Alternatives — only when the model wasn't confident */}
+                    {item.alternatives && item.alternatives.length > 0 && (item.confidence ?? 1) < 0.75 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Not right?</span>
+                        {item.alternatives.map((alt) => (
+                          <button
+                            key={alt}
+                            onClick={() => switchAlternative(item, alt)}
+                            style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 999, border: '1px solid var(--line)', background: 'var(--surface-2)', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--sans)' }}
+                          >
+                            {alt}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Portion adjuster */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-dim)', marginRight: 2 }}>Portion</span>
+                      {[0.5, 1, 1.5, 2].map((f) => {
+                        const active = (portionFactor[item.id] ?? 1) === f
+                        return (
+                          <button
+                            key={f}
+                            onClick={() => setPortion(item, f)}
+                            style={{
+                              fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 8,
+                              border: active ? '1px solid var(--accent-line)' : '1px solid var(--line)',
+                              background: active ? 'var(--accent-wash)' : 'transparent',
+                              color: active ? 'var(--accent)' : 'var(--text-muted)',
+                              cursor: 'pointer', fontFamily: 'var(--sans)',
+                            }}
+                          >
+                            {f === 0.5 ? '½×' : f === 1 ? '1×' : f === 1.5 ? '1½×' : '2×'}
+                          </button>
+                        )
+                      })}
                     </div>
                   </Card>
                 )

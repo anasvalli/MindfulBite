@@ -21,8 +21,48 @@ Method — follow this every time:
 
 ONLY return an empty array if the image truly contains no food or drink at all (e.g. a person, a landscape, a random object).
 
+For EACH item also estimate:
+- "grams": best estimate of edible weight in grams (used to compute nutrition). Be realistic.
+- "confidence": 0.0–1.0, how sure you are of the identification.
+- "alternatives": up to 2 other plausible dish names if uncertain (empty array if confident).
+
 Respond with ONLY a valid JSON array, no markdown, no prose, exactly:
-[{"id":"1","name":"Specific dish or drink name","quantity":"portion (e.g. 1 cup, 1 bowl, 200g)","calories":250,"protein":12,"carbs":30,"fat":8}]`
+[{"id":"1","name":"Specific dish or drink name","quantity":"portion (e.g. 1 cup, 1 bowl, 200g)","grams":220,"calories":250,"protein":12,"carbs":30,"fat":8,"confidence":0.8,"alternatives":["Butter Chicken"]}]`
+
+// ── Stage 2: verified nutrition lookup (USDA FoodData Central) ──────────────
+// Free DB. Set USDA_API_KEY in env for production rate limits; DEMO_KEY works for
+// light use. Returns per-100g macros for the best match, or null on miss/error.
+const USDA_KEY = process.env.USDA_API_KEY ?? 'DEMO_KEY'
+
+async function usdaMacrosPer100g(
+  query: string,
+): Promise<{ kcal: number; protein: number; carbs: number; fat: number } | null> {
+  const controller = new AbortController()
+  const t = setTimeout(() => controller.abort(), 4500)
+  try {
+    const url =
+      `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_KEY}` +
+      `&query=${encodeURIComponent(query)}&pageSize=1&dataType=Survey%20%28FNDDS%29,SR%20Legacy,Foundation`
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) return null
+    const json: any = await res.json()
+    const food = json?.foods?.[0]
+    if (!food) return null
+    const get = (names: string[]): number => {
+      const n = (food.foodNutrients ?? []).find((x: any) =>
+        names.some((nm) => (x.nutrientName ?? '').toLowerCase().includes(nm)),
+      )
+      return n ? Number(n.value) || 0 : 0
+    }
+    const kcal = get(['energy'])
+    if (kcal <= 0) return null
+    return { kcal, protein: get(['protein']), carbs: get(['carbohydrate']), fat: get(['total lipid', 'fat']) }
+  } catch {
+    return null
+  } finally {
+    clearTimeout(t)
+  }
+}
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
@@ -150,12 +190,65 @@ export default async function handler(req: Request): Promise<Response> {
     const json = (await res.json()) as { content: Array<{ type: string; text: string }> }
     const text = json.content?.find((c) => c.type === 'text')?.text ?? '[]'
     const match = text.match(/\[[\s\S]*\]/)
-    let items: unknown = []
+    let parsed: any[] = []
     try {
-      items = match ? JSON.parse(match[0]) : []
+      parsed = match ? JSON.parse(match[0]) : []
     } catch {
-      items = []
+      parsed = []
     }
+    if (!Array.isArray(parsed)) parsed = []
+
+    // Dedupe items the model accidentally repeated (same name).
+    const seenNames = new Set<string>()
+    parsed = parsed.filter((it: any) => {
+      const k = String(it?.name ?? '').trim().toLowerCase()
+      if (!k || seenNames.has(k)) return false
+      seenNames.add(k)
+      return true
+    })
+
+    // ── Stage 2: verify macros against USDA for each item (parallel, bounded) ──
+    // Use the DB's per-100g values scaled by the model's gram estimate ONLY when the
+    // DB result is in the same ballpark as the vision estimate (0.5×–2×). A wildly
+    // different number means a bad name match, so we keep the vision estimate. This
+    // makes the DB a refinement, never a source of new error. Best effort, never blocks.
+    const items = await Promise.all(
+      parsed.slice(0, 6).map(async (it: any, i: number) => {
+        const grams = Number(it.grams) > 0 ? Math.round(Number(it.grams)) : 0
+        const base = {
+          id: it.id != null ? String(it.id) : `item-${i}`,
+          name: String(it.name ?? 'Food'),
+          quantity: String(it.quantity ?? '1 serving'),
+          grams: grams || undefined,
+          confidence: typeof it.confidence === 'number' ? it.confidence : undefined,
+          alternatives: Array.isArray(it.alternatives) ? it.alternatives.slice(0, 2).map(String) : [],
+          calories: Math.round(Number(it.calories) || 0),
+          protein: Math.round(Number(it.protein) || 0),
+          carbs: Math.round(Number(it.carbs) || 0),
+          fat: Math.round(Number(it.fat) || 0),
+          source: 'estimate' as 'usda' | 'estimate',
+        }
+        // Only attempt DB verification when we have a gram estimate and a usable
+        // vision calorie estimate to sanity-check against.
+        if (grams > 0 && base.calories > 0) {
+          const db = await usdaMacrosPer100g(base.name)
+          if (db) {
+            const f = grams / 100
+            const dbCal = Math.round(db.kcal * f)
+            const ratio = dbCal / base.calories
+            // Accept the DB only if it agrees with the vision estimate (same ballpark).
+            if (ratio >= 0.5 && ratio <= 2) {
+              base.calories = dbCal
+              base.protein = Math.round(db.protein * f)
+              base.carbs = Math.round(db.carbs * f)
+              base.fat = Math.round(db.fat * f)
+              base.source = 'usda'
+            }
+          }
+        }
+        return base
+      }),
+    )
 
     return new Response(JSON.stringify({ items }), {
       headers: { 'Content-Type': 'application/json' },

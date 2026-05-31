@@ -15,6 +15,10 @@ function normalizeItems(raw: unknown): FoodItem[] {
       protein: Number(o.protein) || 0,
       carbs: Number(o.carbs) || 0,
       fat: Number(o.fat) || 0,
+      grams: Number(o.grams) > 0 ? Number(o.grams) : undefined,
+      confidence: typeof o.confidence === 'number' ? o.confidence : undefined,
+      alternatives: Array.isArray(o.alternatives) ? (o.alternatives as unknown[]).map(String) : undefined,
+      source: o.source === 'usda' ? 'usda' : o.source === 'estimate' ? 'estimate' : undefined,
     }
   })
 }
