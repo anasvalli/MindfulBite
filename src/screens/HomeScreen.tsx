@@ -240,8 +240,8 @@ export function HomeScreen({ go }: HomeScreenProps) {
         </Card>
       )}
 
-      {/* Main Ring Card */}
-      <Card>
+      {/* Main Ring Card — tap to see the full nutrition breakdown */}
+      <Card onClick={() => go('nutrition')}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <Ring
             size={130}

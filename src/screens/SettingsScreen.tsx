@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme, ACCENTS } from '../contexts/ThemeContext'
 import { useLanguage, LANGUAGES } from '../contexts/LanguageContext'
@@ -48,7 +48,7 @@ interface EditField {
   key: string
   label: string
   value: string
-  type: 'number' | 'prefs'
+  type: 'number' | 'prefs' | 'cuisine'
 }
 
 const DIETARY_PREFS = [
@@ -60,6 +60,24 @@ const DIETARY_PREFS = [
   'Keto',
   'Paleo',
   'None',
+]
+
+const CUISINES = [
+  'South Asian',
+  'East Asian',
+  'Southeast Asian',
+  'Middle Eastern',
+  'Mediterranean',
+  'North African',
+  'African',
+  'European',
+  'Eastern European',
+  'Latin American',
+  'Caribbean',
+  'North American',
+  'Central Asian',
+  'Nordic',
+  'Mixed / Other',
 ]
 
 export function SettingsScreen({ go }: SettingsScreenProps) {
@@ -82,6 +100,25 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [notifEnabled, setNotifEnabled] = useState(isNotificationsEnabled())
+
+  // Backfill macro targets for users who onboarded before they existed:
+  // if they have weight + a calorie goal but no macro targets, compute & persist once.
+  useEffect(() => {
+    if (!user || !profile) return
+    if (profile.protein_goal == null && profile.weight && profile.daily_calorie_goal) {
+      const macros = calculateMacroTargets(
+        profile.weight,
+        profile.goal_weight ?? null,
+        profile.daily_calorie_goal
+      )
+      supabase
+        .from('users')
+        .update({ protein_goal: macros.protein, carbs_goal: macros.carbs, fat_goal: macros.fat })
+        .eq('id', user.id)
+        .then(() => refreshProfile())
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, profile?.protein_goal, profile?.weight, profile?.daily_calorie_goal])
 
   async function toggleNotifications() {
     if (notifEnabled) {
@@ -133,6 +170,12 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
     if (editField.key === 'dietary_prefs') {
       update.dietary_prefs = selectedPrefs.length > 0 ? selectedPrefs.join(',') : null
     }
+    if (editField.key === 'cuisine_pref') {
+      update.cuisine_pref = editValue.trim() || null
+    }
+    if (editField.key === 'protein_goal') update.protein_goal = Number(editValue)
+    if (editField.key === 'carbs_goal') update.carbs_goal = Number(editValue)
+    if (editField.key === 'fat_goal') update.fat_goal = Number(editValue)
     if (editField.key === 'age') {
       update.age = Number(editValue)
     }
@@ -149,10 +192,13 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
       }
     }
 
-    if (editField.key === 'daily_calorie_goal' || editField.key === 'weight') {
+    // Recompute macro targets when calorie goal / weight / goal weight change
+    // (unless the user is directly editing a macro target).
+    if (['daily_calorie_goal', 'weight', 'goal_weight'].includes(editField.key)) {
       const weightKg = editField.key === 'weight' ? Number(editValue) : (profile?.weight ?? 70)
       const calGoal = editField.key === 'daily_calorie_goal' ? Number(editValue) : (profile?.daily_calorie_goal ?? 2150)
-      const macros = calculateMacroTargets(weightKg, profile?.goal_weight ?? null, calGoal)
+      const goalW = editField.key === 'goal_weight' ? Number(editValue) : (profile?.goal_weight ?? null)
+      const macros = calculateMacroTargets(weightKg, goalW, calGoal)
       update.protein_goal = macros.protein
       update.carbs_goal = macros.carbs
       update.fat_goal = macros.fat
@@ -253,7 +299,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
     rawValue: string | null
     displayValue: string
     editable: boolean
-    type: 'number' | 'prefs'
+    type: 'number' | 'prefs' | 'cuisine'
   }> = [
     {
       key: 'daily_calorie_goal',
@@ -308,33 +354,33 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
     {
       key: 'cuisine_pref',
       label: 'Cuisine',
-      rawValue: '',
+      rawValue: profile?.cuisine_pref ?? '',
       displayValue: profile?.cuisine_pref ?? 'Not set',
-      editable: false,
-      type: 'number',
+      editable: true,
+      type: 'cuisine',
     },
     {
       key: 'protein_goal',
       label: 'Protein Target',
-      rawValue: '',
-      displayValue: profile?.protein_goal != null ? `${profile.protein_goal}g` : '—',
-      editable: false,
+      rawValue: profile?.protein_goal != null ? String(profile.protein_goal) : '',
+      displayValue: profile?.protein_goal != null ? `${Math.round(profile.protein_goal)}g` : '—',
+      editable: true,
       type: 'number',
     },
     {
       key: 'carbs_goal',
       label: 'Carbs Target',
-      rawValue: '',
-      displayValue: profile?.carbs_goal != null ? `${profile.carbs_goal}g` : '—',
-      editable: false,
+      rawValue: profile?.carbs_goal != null ? String(profile.carbs_goal) : '',
+      displayValue: profile?.carbs_goal != null ? `${Math.round(profile.carbs_goal)}g` : '—',
+      editable: true,
       type: 'number',
     },
     {
       key: 'fat_goal',
       label: 'Fat Target',
-      rawValue: '',
-      displayValue: profile?.fat_goal != null ? `${profile.fat_goal}g` : '—',
-      editable: false,
+      rawValue: profile?.fat_goal != null ? String(profile.fat_goal) : '',
+      displayValue: profile?.fat_goal != null ? `${Math.round(profile.fat_goal)}g` : '—',
+      editable: true,
       type: 'number',
     },
     {
@@ -1033,6 +1079,46 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                     </button>
                   )
                 })}
+              </div>
+            )}
+
+            {editField.type === 'cuisine' && (
+              <div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                  {CUISINES.map((c) => {
+                    const selected = editValue === c
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => setEditValue(c)}
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: 24,
+                          border: selected ? '1px solid var(--accent-line)' : '1px solid var(--line)',
+                          background: selected ? 'var(--accent-wash)' : 'var(--surface-2)',
+                          color: selected ? 'var(--accent)' : 'var(--text-muted)',
+                          fontFamily: 'var(--sans)',
+                          fontSize: 13,
+                          fontWeight: selected ? 600 : 400,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {c}
+                      </button>
+                    )
+                  })}
+                </div>
+                <label style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  Or type your own
+                </label>
+                <input
+                  type="text"
+                  value={CUISINES.includes(editValue) ? '' : editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  placeholder="e.g. Sri Lankan, Persian, Lebanese"
+                  style={{ ...inputStyle, marginTop: 6 }}
+                />
               </div>
             )}
 

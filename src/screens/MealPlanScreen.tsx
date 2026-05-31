@@ -28,6 +28,7 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toastItem, setToastItem] = useState<string | null>(null)
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
 
   // Load saved plan from localStorage on mount
   useEffect(() => {
@@ -389,8 +390,11 @@ Make meals culturally appropriate for my diet preferences. Total should be close
                   {item.emoji}
                 </div>
 
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Info — tap to expand the full meal name + macros */}
+                <div
+                  style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                  onClick={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <span
                       style={{
@@ -404,31 +408,27 @@ Make meals culturally appropriate for my diet preferences. Total should be close
                     >
                       {item.type}
                     </span>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--text-dim)',
-                        fontFamily: 'var(--mono)',
-                      }}
-                    >
-                      🕐 {item.time}
-                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>🕐 {item.time}</span>
                   </div>
                   <div
                     style={{
                       fontSize: 14.5,
                       color: 'var(--text)',
-                      whiteSpace: 'nowrap',
+                      whiteSpace: expandedIdx === idx ? 'normal' : 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
+                      lineHeight: 1.35,
                     }}
                   >
                     {item.name}
                   </div>
                   {item.protein != null && (
-                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3, fontFamily: 'var(--mono)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>
                       P{item.protein}g · C{item.carbs ?? 0}g · F{item.fat ?? 0}g
                     </div>
+                  )}
+                  {expandedIdx !== idx && (
+                    <div style={{ fontSize: 10.5, color: 'var(--accent)', marginTop: 4 }}>Tap for details</div>
                   )}
                 </div>
 
