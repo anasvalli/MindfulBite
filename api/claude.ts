@@ -21,7 +21,7 @@ const TOOLS = [
   {
     name: 'get_weekly_trends',
     description:
-      "Get the user's 7-day trend data for calories, mood, and sleep. Use this for weekly analysis, pattern questions, or when they ask how their week is going.",
+      "Get the user's holistic 7-day picture: average calories & protein, mood distribution & check-in count, sleep duration, weight trend, and hydration. Use this for weekly analysis, to connect food↔mood↔sleep↔weight, or whenever you need the whole-health context to give a complete answer.",
     input_schema: {
       type: 'object',
       properties: {},
@@ -113,9 +113,10 @@ async function executeTool(
     }
 
     case 'get_weekly_trends': {
-      const [mealsRes, moodsRes, sleepRes] = await Promise.all([
+      const sevenDayDate = sevenDaysAgo.split('T')[0]
+      const [mealsRes, moodsRes, sleepRes, weightRes, waterRes] = await Promise.all([
         fetch(
-          `${base}/meals?user_id=eq.${userId}&created_at=gte.${sevenDaysAgo}&select=total_calories,created_at`,
+          `${base}/meals?user_id=eq.${userId}&created_at=gte.${sevenDaysAgo}&select=total_calories,macros_json,created_at`,
           { headers },
         ),
         fetch(
@@ -123,7 +124,15 @@ async function executeTool(
           { headers },
         ),
         fetch(
-          `${base}/sleep_logs?user_id=eq.${userId}&date=gte.${sevenDaysAgo.split('T')[0]}&select=duration_minutes,quality_score,date`,
+          `${base}/sleep_logs?user_id=eq.${userId}&date=gte.${sevenDayDate}&select=duration_minutes,quality_score,date`,
+          { headers },
+        ),
+        fetch(
+          `${base}/weight_logs?user_id=eq.${userId}&date=gte.${sevenDayDate}&select=weight_kg,date&order=date.asc`,
+          { headers },
+        ),
+        fetch(
+          `${base}/water_logs?user_id=eq.${userId}&date=gte.${sevenDayDate}&select=amount_ml,date`,
           { headers },
         ),
       ])
@@ -133,9 +142,15 @@ async function executeTool(
       const meals = await mealsRes.json()
       const moods = await moodsRes.json()
       const sleep = await sleepRes.json()
+      const weights = weightRes.ok ? await weightRes.json() : []
+      const water = waterRes.ok ? await waterRes.json() : []
       const avgCal =
         meals.length
           ? Math.round(meals.reduce((s: number, m: any) => s + m.total_calories, 0) / meals.length)
+          : 0
+      const avgProtein =
+        meals.length
+          ? Math.round(meals.reduce((s: number, m: any) => s + (m.macros_json?.protein ?? 0), 0) / meals.length)
           : 0
       const moodCounts: Record<string, number> = {}
       moods.forEach((m: any) => {
@@ -147,15 +162,28 @@ async function executeTool(
               sleep.reduce((s: number, d: any) => s + (d.duration_minutes ?? 0), 0) / sleep.length,
             )
           : 0
+      // Water: total ml per day, then average across days that have entries
+      const waterByDay: Record<string, number> = {}
+      water.forEach((w: any) => { waterByDay[w.date] = (waterByDay[w.date] ?? 0) + (w.amount_ml ?? 0) })
+      const waterDays = Object.values(waterByDay)
+      const avgWaterMl = waterDays.length ? Math.round(waterDays.reduce((a, b) => a + b, 0) / waterDays.length) : 0
+      const weightTrend =
+        weights.length >= 2
+          ? `${weights[0].weight_kg}kg → ${weights[weights.length - 1].weight_kg}kg over ${weights.length} logs`
+          : weights.length === 1
+            ? `${weights[0].weight_kg}kg (single log)`
+            : 'no weight logs'
       return JSON.stringify({
         days_with_meals: meals.length,
         avg_daily_calories: avgCal,
+        avg_daily_protein_g: avgProtein,
         mood_distribution: moodCounts,
+        mood_checkins_count: moods.length,
         days_with_sleep_logged: sleep.length,
         avg_sleep_minutes: avgSleep,
-        avg_sleep_formatted: avgSleep
-          ? `${Math.floor(avgSleep / 60)}h ${avgSleep % 60}m`
-          : 'no data',
+        avg_sleep_formatted: avgSleep ? `${Math.floor(avgSleep / 60)}h ${avgSleep % 60}m` : 'no data',
+        weight_trend: weightTrend,
+        avg_daily_water_ml: avgWaterMl,
       })
     }
 
@@ -239,8 +267,9 @@ async function callClaude(
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
+      // Sonnet for the nuanced nutritionist + psychologist synthesis Sage needs.
+      model: 'claude-sonnet-4-6',
+      max_tokens: 700,
       system,
       tools,
       messages,
@@ -303,10 +332,10 @@ export default async function handler(req: Request): Promise<Response> {
 
   const personalityPrefix =
     personality === 'direct'
-      ? 'Be direct and concise. Skip pleasantries. Give the answer and the action, nothing more.'
+      ? 'TONE: Direct and concise. Lead with the insight and the one action that matters. Minimal pleasantries, but never cold.'
       : personality === 'clinical'
-        ? 'Be precise and evidence-based. Reference specific numbers, macros, and physiological reasoning. Professional but not cold.'
-        : 'Be warm, encouraging, and supportive. Speak like a knowledgeable friend.'
+        ? 'TONE: Precise and evidence-based. Reference specific numbers, macros, and physiological/psychological mechanisms. Professional, like a clinician explaining clearly.'
+        : 'TONE: Warm, validating, and encouraging — like a trusted practitioner who genuinely cares. Lead with empathy, then guidance.'
 
   // Verify JWT from Authorization header and extract userId server-side
   const authHeader = req.headers.get('authorization') ?? ''
@@ -326,27 +355,37 @@ export default async function handler(req: Request): Promise<Response> {
 
   const systemPrompt = `${personalityPrefix}
 
-You are Sage, a personal wellness coach built into MindfulBite. You have access to real-time tools to look up the user's actual data.
+You are Sage, the wellbeing companion inside MindfulBite. You hold TWO areas of expertise and you bring BOTH to every conversation:
 
-IMPORTANT: When users ask about their nutrition, mood, sleep, or patterns — ALWAYS use the appropriate tool to get real data before responding. Don't guess or use the context summary when you can get fresh data with a tool.
+1. REGISTERED NUTRITIONIST — you understand calories, macronutrients (protein/carbs/fat), nutrient timing, hydration, dietary patterns, and how food affects energy, blood sugar, satiety, and body composition. You translate the user's real numbers and goals into specific, practical food guidance.
 
-Tool usage rules:
-- get_todays_nutrition: for any question about today's eating
-- get_weekly_trends: for "how is my week going", progress questions
-- get_sleep_summary: for energy levels, fatigue, sleep quality questions
-- get_mood_history: for emotional wellbeing, stress, mood pattern questions
-- get_ai_patterns: for personalized pattern insights
+2. WELLNESS PSYCHOLOGIST — you understand the mind-body connection: emotional eating, stress, the gut-brain axis, how sleep and blood sugar shape mood and cravings, and behavior-change psychology. You validate feelings first, reframe gently (never preachy), and help the user build a kind, sustainable relationship with food and themselves.
 
-Response rules:
-- After getting tool data, respond in 2-3 sentences max
-- Be warm and specific — reference their actual numbers
-- Never be clinical or alarming
-- Speak like a knowledgeable friend
+YOUR CORE SKILL is SYNTHESIS — you connect the dots across food, mood, sleep, hydration, weight, and activity into one coherent picture of the person's overall health. You don't treat these as separate silos. Examples of the connections you look for:
+- A high-carb, low-protein meal → an energy/blood-sugar dip ~90 min later → a low or irritable mood.
+- Poor or short sleep → higher next-day cravings, lower willpower, and worse mood.
+- Under-eating or skipped protein → fatigue, low mood, poor recovery.
+- "Low"/"Tense" moods clustering around certain foods, times, or low-hydration days → likely emotional-eating or fuel patterns worth naming gently.
+- Steady protein + good sleep + hydration → stable mood and energy; reinforce what's working.
 
-When the user asks about protein, carbs, fat, or weight goals — use their actual targets from the context to give specific, numeric advice. Act as a clinical nutritionist: calculate deficits, suggest specific foods, be precise.
+HOW YOU WORK:
+- ALWAYS pull real data with tools before advising. Use get_todays_nutrition for today's food, get_weekly_trends for the holistic week (food + mood + sleep + weight + water), get_sleep_summary, get_mood_history, and get_ai_patterns for learned patterns. When a question touches mood OR energy, ALSO check nutrition and sleep — the cause is usually cross-domain.
+- Be specific and numeric as a nutritionist (use their actual calorie/protein/macro targets — calculate the gap, name foods that close it).
+- Be empathetic and human as a psychologist (acknowledge the emotion, normalize, encourage — one slow day is information, not failure).
+- Then connect them: explain the likely *why* behind how they feel using their food/sleep data.
+
+RESPONSE STYLE:
+- Conversational and tight: usually 3-5 sentences. Go a little longer only when the user is struggling emotionally and needs real support; stay shorter for quick factual questions.
+- Reference their actual numbers. Offer one clear, doable next step.
+- Never lecture, never shame, never moralize food as "good/bad."
+
+SAFETY (important):
+- You are a supportive coach, NOT a doctor. Don't diagnose conditions or prescribe; for medical concerns, suggest they consult a professional.
+- Be alert to disordered-eating signals (extreme restriction, purging talk, obsessive control, very low intake). Never encourage these — respond with care and gently suggest professional support.
+- If the user expresses serious distress, hopelessness, or self-harm, drop the coaching, respond with compassion, and point them to a mental-health professional or local crisis line.
 
 User profile context:
-${userContext || 'New user — no data yet. Welcome them warmly and encourage their first meal log.'}`
+${userContext || 'New user — no data yet. Welcome them warmly, briefly explain you look at food, mood, sleep, and overall health together, and encourage their first log.'}`
 
   // Convert history to Anthropic message format, skipping the initial greeting
   const anthropicMessages: any[] = history

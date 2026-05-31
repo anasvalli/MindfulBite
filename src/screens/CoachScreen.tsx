@@ -49,7 +49,7 @@ export function CoachScreen({ go }: CoachScreenProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      text: `Hi${firstName ? ` ${firstName}` : ''}! I'm Sage, your personal wellness coach. Ask me anything about your nutrition, sleep, or mood — I'll pull your real data to give you personalised guidance.`,
+      text: `Hi${firstName ? ` ${firstName}` : ''} — I'm Sage. I'm part nutritionist, part wellness psychologist, so I look at your food, mood, sleep, and overall health together. Ask me anything, and I'll use your real data to explain not just the *what*, but the *why* behind how you feel.`,
     },
   ])
   const [input, setInput] = useState('')
