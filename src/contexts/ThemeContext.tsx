@@ -80,16 +80,17 @@ export function useTheme(): ThemeContextValue {
 function applyThemeVars(dark: boolean, hue: number) {
   const root = document.documentElement
   if (dark) {
-    root.style.setProperty('--bg', 'oklch(0.165 0.008 75)')
-    root.style.setProperty('--surface', 'oklch(0.215 0.009 75)')
-    root.style.setProperty('--surface-2', 'oklch(0.27 0.01 75)')
+    // "Forest Calm" — soft deep green-charcoal, lifted off pure black, calm at night.
+    root.style.setProperty('--bg', 'oklch(0.21 0.016 155)')
+    root.style.setProperty('--surface', 'oklch(0.255 0.02 155)')
+    root.style.setProperty('--surface-2', 'oklch(0.31 0.022 155)')
     root.style.setProperty('--line', 'rgba(255,255,255,0.08)')
-    root.style.setProperty('--text', 'oklch(0.95 0.008 85)')
-    root.style.setProperty('--text-muted', 'oklch(0.74 0.012 80)')
-    root.style.setProperty('--text-dim', 'oklch(0.57 0.01 78)')
+    root.style.setProperty('--text', 'oklch(0.94 0.01 150)')
+    root.style.setProperty('--text-muted', 'oklch(0.74 0.012 150)')
+    root.style.setProperty('--text-dim', 'oklch(0.58 0.012 150)')
     root.style.setProperty('--ring-track', 'rgba(255,255,255,0.09)')
-    root.style.setProperty('--on-accent', `oklch(0.20 0.03 ${hue})`)
-    root.style.setProperty('--card-shadow', '0 1px 2px rgba(0,0,0,0.25)')
+    root.style.setProperty('--on-accent', `oklch(0.22 0.03 ${hue})`)
+    root.style.setProperty('--card-shadow', '0 1px 2px rgba(0,0,0,0.30)')
     root.style.setProperty('--accent', `oklch(0.80 0.09 ${hue})`)
     root.style.setProperty('--accent-wash', `oklch(0.80 0.09 ${hue} / 0.13)`)
     root.style.setProperty('--accent-line', `oklch(0.80 0.09 ${hue} / 0.30)`)

@@ -9,19 +9,20 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://ebnamzpofmlhlnzgvkbe.supabase.co'
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
-const SYSTEM_PROMPT = `You are an expert nutritionist and chef with deep knowledge of global cuisines. You analyze food photos with great care and precision.
+const SYSTEM_PROMPT = `You are an expert nutritionist and chef with deep knowledge of global cuisines, including South Asian (Pakistani, Indian, Bangladeshi), Middle Eastern, and beverages. You analyze food AND drink photos with great care and precision.
 
 Method — follow this every time:
-1. Look carefully at the WHOLE image: the dish, its color, texture, sauce, container, garnishes, and any sides.
-2. Consider the user's cuisine context (provided in the message). A brown sauced dish in a bowl from a South Asian kitchen is far more likely to be a curry/salan/daal than peanut butter. Reason about what dish this most plausibly is given that context.
-3. Do NOT jump to a single common ingredient. Most photos are prepared dishes or full meals — identify the dish, then its components.
-4. Identify every distinct food item visible.
-5. Estimate a realistic portion for each from visual cues, then accurate calories and macros.
+1. Look carefully at the WHOLE image: the dish/drink, its color, texture, sauce, container (cup, mug, glass, bowl, plate), garnishes, and any sides.
+2. BEVERAGES COUNT. A cup/mug/glass of liquid is a loggable item — chai (spiced milk tea, ~120-180 kcal/cup with milk+sugar), coffee (black ~5 kcal; with milk/sugar 60-150; latte/cappuccino 120-200), tea, lassi, juice, smoothies, soft drinks, milk. Identify the drink and estimate calories including milk and sugar. NEVER return empty just because it's a drink.
+3. Use the user's cuisine context to name dishes. Pakistani and Indian food look very similar — do NOT agonize over the exact country. Name the SPECIFIC DISH accurately (e.g. "Chicken Karahi", "Chicken Biryani", "Daal", "Nihari", "Butter Chicken", "Chana Masala"). If the user's cuisine is Pakistani, lean toward Pakistani naming for ambiguous dishes; if Indian, Indian naming. The dish name and the macros matter far more than the country label.
+4. Do NOT jump to a single common Western ingredient (e.g. "peanut butter") for a sauced South Asian dish. Identify the dish, then its components.
+5. Identify every distinct food/drink item visible.
+6. Estimate a realistic portion for each from visual cues, then accurate calories and macros.
 
-If the image genuinely contains no food, return an empty array.
+ONLY return an empty array if the image truly contains no food or drink at all (e.g. a person, a landscape, a random object).
 
 Respond with ONLY a valid JSON array, no markdown, no prose, exactly:
-[{"id":"1","name":"Specific dish or food name","quantity":"portion (e.g. 1 bowl, 200g)","calories":250,"protein":12,"carbs":30,"fat":8}]`
+[{"id":"1","name":"Specific dish or drink name","quantity":"portion (e.g. 1 cup, 1 bowl, 200g)","calories":250,"protein":12,"carbs":30,"fat":8}]`
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
@@ -66,7 +67,7 @@ export default async function handler(req: Request): Promise<Response> {
   const dietary = (body.dietary ?? '').trim()
   const contextLine =
     `User context — cuisine preference: ${cuisine || 'unspecified'}; dietary: ${dietary || 'none'}. ` +
-    `Use this to inform what dish this most likely is. Analyze the meal and return the JSON array.`
+    `Use the cuisine to name ambiguous dishes (e.g. South Asian → name the specific karahi/biryani/daal rather than guessing the country). Beverages like chai, coffee, lassi count — identify and estimate them. Analyze the food or drink and return the JSON array.`
 
   // Correction-memory feedback loop: if we know the user and have a service key,
   // pull their recent corrections so the model calibrates to their preferences.
