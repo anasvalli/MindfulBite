@@ -34,6 +34,14 @@ interface ClinicalReport {
   summary: string | null
 }
 
+interface HistoryPoint {
+  week_start: string
+  overall_score: number | null
+  food_score: number | null
+  mood_score: number | null
+  sleep_score: number | null
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -50,6 +58,13 @@ function getDateKey(row: Record<string, unknown>): string {
   const raw = (row['created_at'] ?? row['logged_at'] ?? row['date']) as string | undefined
   if (!raw) return ''
   return new Date(raw).toISOString().split('T')[0] ?? ''
+}
+
+function abbrevWeek(weekStart: string): string {
+  // weekStart is a YYYY-MM-DD date; render as e.g. "May 26"
+  const d = new Date(`${weekStart}T00:00:00`)
+  if (isNaN(d.getTime())) return weekStart
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function buildLast7(): DayData[] {
@@ -83,6 +98,7 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
 
   const [days, setDays] = useState<DayData[]>(buildLast7())
   const [report, setReport] = useState<ClinicalReport | null>(null)
+  const [history, setHistory] = useState<HistoryPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [animScores, setAnimScores] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -106,7 +122,7 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
         sevenDaysAgo.setHours(0, 0, 0, 0)
         const since = sevenDaysAgo.toISOString()
 
-        const [mealsRes, moodRes, sleepRes, reportRes] = await Promise.allSettled([
+        const [mealsRes, moodRes, sleepRes, reportRes, historyRes] = await Promise.allSettled([
           supabase
             .from('meals')
             .select('total_calories, macros_json, created_at')
@@ -132,6 +148,13 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
             .eq('user_id', user!.id)
             .order('week_start', { ascending: false })
             .limit(1),
+
+          supabase
+            .from('clinical_reports')
+            .select('week_start, overall_score, food_score, mood_score, sleep_score')
+            .eq('user_id', user!.id)
+            .order('week_start', { ascending: true })
+            .limit(8),
         ])
 
         const base = buildLast7()
@@ -191,6 +214,11 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
         // Clinical report
         if (reportRes.status === 'fulfilled' && reportRes.value.data && reportRes.value.data.length > 0) {
           setReport(reportRes.value.data[0] as ClinicalReport)
+        }
+
+        // Score history (oldest → newest)
+        if (historyRes.status === 'fulfilled' && historyRes.value.data) {
+          setHistory(historyRes.value.data as HistoryPoint[])
         }
 
         setDays([...dayMap.values()])
@@ -276,6 +304,24 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
         recommendations: JSON.stringify(newReport.recommendations),
         summary: newReport.summary,
       })
+
+      // Reflect the new/updated week in the trend history
+      if (weekStartStr) {
+        setHistory((prev) => {
+          const point: HistoryPoint = {
+            week_start: weekStartStr,
+            overall_score: newReport.overall_score,
+            food_score: newReport.food_score,
+            mood_score: newReport.mood_score,
+            sleep_score: newReport.sleep_score,
+          }
+          const others = prev.filter((p) => p.week_start !== weekStartStr)
+          return [...others, point]
+            .sort((a, b) => a.week_start.localeCompare(b.week_start))
+            .slice(-8)
+        })
+      }
+
       setAnimScores(false)
       setTimeout(() => setAnimScores(true), 100)
     } catch (err) {
@@ -514,6 +560,109 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
           </button>
         </Card>
       )}
+
+      {/* ── Section 1b: Score Trend ── */}
+      {history.length >= 2 ? (() => {
+        const W = 300
+        const H = 90
+        const PAD_X = 10
+        const PAD_TOP = 8
+        const PAD_BOTTOM = 8
+        const innerW = W - PAD_X * 2
+        const innerH = H - PAD_TOP - PAD_BOTTOM
+        const n = history.length
+        const pts = history.map((h, i) => {
+          const score = h.overall_score ?? 0
+          const x = n === 1 ? PAD_X + innerW / 2 : PAD_X + (innerW * i) / (n - 1)
+          const y = PAD_TOP + innerH - (Math.max(0, Math.min(10, score)) / 10) * innerH
+          return { x, y, score }
+        })
+        const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+        const areaPath = `${linePath} L ${pts[pts.length - 1]!.x.toFixed(1)} ${(PAD_TOP + innerH).toFixed(1)} L ${pts[0]!.x.toFixed(1)} ${(PAD_TOP + innerH).toFixed(1)} Z`
+        const latest = history[history.length - 1]!.overall_score ?? 0
+        const prev = history[history.length - 2]!.overall_score ?? 0
+        const delta = latest - prev
+        return (
+          <Card>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+              <div>
+                <Eyebrow style={{ display: 'block', marginBottom: 6 }}>Score Trend</Eyebrow>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontFamily: 'var(--serif)', fontSize: 30, fontWeight: 500, color: 'var(--text)', lineHeight: 1 }}>
+                    {latest.toFixed(1)}
+                  </span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)' }}>/ 10</span>
+                  {delta !== 0 && (
+                    <span style={{
+                      fontFamily: 'var(--mono)', fontSize: 11,
+                      color: delta > 0 ? 'var(--accent)' : 'var(--text-muted)',
+                    }}>
+                      {delta > 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-dim)' }}>
+                last {n} weeks
+              </span>
+            </div>
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              width="100%"
+              height={H}
+              preserveAspectRatio="none"
+              style={{ display: 'block', overflow: 'visible' }}
+            >
+              <defs>
+                <linearGradient id="mb-trend-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.18" />
+                  <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d={areaPath} fill="url(#mb-trend-fill)" />
+              <path
+                d={linePath}
+                fill="none"
+                stroke="var(--accent)"
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+              {pts.map((p, i) => (
+                <circle
+                  key={i}
+                  cx={p.x}
+                  cy={p.y}
+                  r={i === pts.length - 1 ? 3.5 : 2.5}
+                  fill={i === pts.length - 1 ? 'var(--accent)' : 'var(--surface)'}
+                  stroke="var(--accent)"
+                  strokeWidth={1.5}
+                />
+              ))}
+            </svg>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+              {history.map((h, i) => (
+                <span
+                  key={i}
+                  style={{
+                    fontSize: 9,
+                    fontFamily: 'var(--mono)',
+                    color: i === history.length - 1 ? 'var(--accent)' : 'var(--text-dim)',
+                    flex: 1,
+                    textAlign: 'center',
+                  }}
+                >
+                  {abbrevWeek(h.week_start)}
+                </span>
+              ))}
+            </div>
+          </Card>
+        )
+      })() : history.length === 1 ? (
+        <p style={{ fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.45, padding: '0 4px', margin: 0 }}>
+          Generate reports across multiple weeks to see your trend.
+        </p>
+      ) : null}
 
       {/* ── Section 2: Calorie Trend ── */}
       <Card>

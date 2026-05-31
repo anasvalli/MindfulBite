@@ -58,6 +58,48 @@ const TOOLS = [
       required: [],
     },
   },
+  // ── Action tools (writes) — only call after the user clearly agrees ──
+  {
+    name: 'log_meal',
+    description:
+      "Log a meal to the user's food diary for today. ONLY call this after the user clearly confirms they want it logged (e.g. 'log that', 'add it', 'yes log it'). Estimate macros if the user doesn't give them.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Food/meal name, e.g. "2 boiled eggs and toast"' },
+        calories: { type: 'number' },
+        protein: { type: 'number', description: 'grams' },
+        carbs: { type: 'number', description: 'grams' },
+        fat: { type: 'number', description: 'grams' },
+      },
+      required: ['name', 'calories'],
+    },
+  },
+  {
+    name: 'set_calorie_goal',
+    description:
+      "Update the user's daily calorie goal. Protein/carbs/fat targets are recalculated automatically. ONLY call after the user confirms the new goal.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        calories: { type: 'number', description: 'New daily calorie goal' },
+      },
+      required: ['calories'],
+    },
+  },
+  {
+    name: 'save_observation',
+    description:
+      "Save a durable insight about this user to your long-term memory (e.g. 'tends to skip breakfast when stressed', 'prefers high-protein dinners', 'mood dips after high-carb lunches'). Use this when you notice something worth remembering across conversations. Keep it to one specific, useful sentence.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        observation: { type: 'string', description: 'One specific insight to remember' },
+        type: { type: 'string', description: "Category: 'food' | 'mood' | 'sleep' | 'behavior' | 'preference'" },
+      },
+      required: ['observation'],
+    },
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -66,6 +108,7 @@ const TOOLS = [
 
 async function executeTool(
   toolName: string,
+  input: any,
   userId: string,
   serviceKey: string,
   supabaseUrl: string,
@@ -82,6 +125,7 @@ async function executeTool(
     apikey: serviceKey,
     Authorization: `Bearer ${serviceKey}`,
   }
+  const writeHeaders = { ...headers, 'Content-Type': 'application/json' }
   const base = supabaseUrl + '/rest/v1'
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
@@ -244,6 +288,72 @@ async function executeTool(
         : JSON.stringify({ patterns: [], message: 'No patterns extracted yet' })
     }
 
+    case 'log_meal': {
+      const calories = Math.round(Number(input?.calories) || 0)
+      const protein = Math.round(Number(input?.protein) || 0)
+      const carbs = Math.round(Number(input?.carbs) || 0)
+      const fat = Math.round(Number(input?.fat) || 0)
+      const name = String(input?.name ?? 'Meal')
+      const res = await fetch(`${base}/meals`, {
+        method: 'POST',
+        headers: { ...writeHeaders, Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          user_id: userId,
+          image_url: null,
+          items_json: [{ id: `sage-${Date.now()}`, name, quantity: '1 serving', calories, protein, carbs, fat }],
+          total_calories: calories,
+          macros_json: { protein, carbs, fat },
+          created_at: new Date().toISOString(),
+        }),
+      })
+      if (!res.ok) return JSON.stringify({ error: `Failed to log meal: ${res.status}` })
+      return JSON.stringify({ logged: true, name, calories, protein, carbs, fat })
+    }
+
+    case 'set_calorie_goal': {
+      const calories = Math.round(Number(input?.calories) || 0)
+      if (calories < 800 || calories > 6000) {
+        return JSON.stringify({ error: 'Calorie goal must be between 800 and 6000.' })
+      }
+      // Recompute macros from the new goal (mirrors lib/macros: protein by weight goal, fat %)
+      const profRes = await fetch(`${base}/users?id=eq.${userId}&select=weight,goal_weight`, { headers })
+      const prof = profRes.ok ? (await profRes.json())[0] : null
+      const w = Number(prof?.weight) || 70
+      const gw = prof?.goal_weight != null ? Number(prof.goal_weight) : null
+      const isLosing = gw !== null && gw < w
+      const isGaining = gw !== null && gw > w
+      const protein = Math.max(50, Math.round(w * (isGaining ? 2.2 : isLosing ? 2.0 : 1.6)))
+      const fat = Math.max(30, Math.round((calories * (isLosing ? 0.25 : 0.3)) / 9))
+      const carbs = Math.max(50, Math.round((calories - protein * 4 - fat * 9) / 4))
+      const res = await fetch(`${base}/users?id=eq.${userId}`, {
+        method: 'PATCH',
+        headers: { ...writeHeaders, Prefer: 'return=minimal' },
+        body: JSON.stringify({ daily_calorie_goal: calories, protein_goal: protein, carbs_goal: carbs, fat_goal: fat }),
+      })
+      if (!res.ok) return JSON.stringify({ error: `Failed to update goal: ${res.status}` })
+      return JSON.stringify({ updated: true, daily_calorie_goal: calories, protein_goal: protein, carbs_goal: carbs, fat_goal: fat })
+    }
+
+    case 'save_observation': {
+      const observation = String(input?.observation ?? '').trim()
+      if (!observation) return JSON.stringify({ error: 'No observation provided.' })
+      const type = String(input?.type ?? 'behavior')
+      // Read current patterns, append, upsert (ai_user_model.patterns is a JSONB array)
+      const cur = await fetch(`${base}/ai_user_model?user_id=eq.${userId}&select=patterns`, { headers })
+      const existing = cur.ok ? (await cur.json())[0]?.patterns ?? [] : []
+      const patterns = Array.isArray(existing) ? existing : []
+      patterns.push({ type, description: observation, confidence: 0.9, source: 'sage', observed_at: new Date().toISOString() })
+      // keep the most recent 40
+      const trimmed = patterns.slice(-40)
+      const res = await fetch(`${base}/ai_user_model?on_conflict=user_id`, {
+        method: 'POST',
+        headers: { ...writeHeaders, Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ user_id: userId, patterns: trimmed, updated_at: new Date().toISOString() }),
+      })
+      if (!res.ok) return JSON.stringify({ error: `Failed to save observation: ${res.status}` })
+      return JSON.stringify({ remembered: true, observation })
+    }
+
     default:
       return JSON.stringify({ error: `Unknown tool: ${toolName}` })
   }
@@ -370,6 +480,12 @@ YOUR CORE SKILL is SYNTHESIS — you connect the dots across food, mood, sleep, 
 
 HOW YOU WORK:
 - ALWAYS pull real data with tools before advising. Use get_todays_nutrition for today's food, get_weekly_trends for the holistic week (food + mood + sleep + weight + water), get_sleep_summary, get_mood_history, and get_ai_patterns for learned patterns. When a question touches mood OR energy, ALSO check nutrition and sleep — the cause is usually cross-domain.
+
+YOU CAN ALSO ACT (not just advise):
+- log_meal — log a meal to their diary. When the user gives a clear instruction ("log that", "I ate X, add it"), DO IT immediately — don't ask again. Estimate macros if needed, then confirm what you logged.
+- set_calorie_goal — change their daily calorie goal (macros auto-recalculate). When the user gives a specific number with clear intent ("change my goal to 2000", "set my calories to 1800"), DO IT immediately and confirm the result. Only ask back if the number or intent is genuinely ambiguous.
+- save_observation — quietly save a durable insight to your long-term memory when you notice something worth remembering across conversations (e.g. "mood dips after high-carb lunches"). You don't need permission to remember; do it naturally, no need to announce it every time.
+- A clear imperative IS the user's consent — act on it. Only ask first when the request is vague or you'd be guessing at an important value.
 - Be specific and numeric as a nutritionist (use their actual calorie/protein/macro targets — calculate the gap, name foods that close it).
 - Be empathetic and human as a psychologist (acknowledge the emotion, normalize, encourage — one slow day is information, not failure).
 - Then connect them: explain the likely *why* behind how they feel using their food/sleep data.
@@ -429,7 +545,7 @@ ${userContext || 'New user — no data yet. Welcome them warmly, briefly explain
         toolUses.map(async (tu: any) => ({
           type: 'tool_result',
           tool_use_id: tu.id,
-          content: await executeTool(tu.name, userId, SERVICE_KEY, SUPABASE_URL),
+          content: await executeTool(tu.name, tu.input, userId, SERVICE_KEY, SUPABASE_URL),
         })),
       )
 

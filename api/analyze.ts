@@ -6,6 +6,8 @@
 export const config = { runtime: 'edge' }
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
+const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://ebnamzpofmlhlnzgvkbe.supabase.co'
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
 const SYSTEM_PROMPT = `You are an expert nutritionist and chef with deep knowledge of global cuisines. You analyze food photos with great care and precision.
 
@@ -40,7 +42,7 @@ export default async function handler(req: Request): Promise<Response> {
     })
   }
 
-  let body: { image?: string; cuisine?: string; dietary?: string }
+  let body: { image?: string; cuisine?: string; dietary?: string; userId?: string }
   try {
     body = await req.json()
   } catch {
@@ -66,6 +68,49 @@ export default async function handler(req: Request): Promise<Response> {
     `User context — cuisine preference: ${cuisine || 'unspecified'}; dietary: ${dietary || 'none'}. ` +
     `Use this to inform what dish this most likely is. Analyze the meal and return the JSON array.`
 
+  // Correction-memory feedback loop: if we know the user and have a service key,
+  // pull their recent corrections so the model calibrates to their preferences.
+  // Best-effort only — never block or break analysis.
+  let correctionHint = ''
+  const userId = (body.userId ?? '').trim()
+  if (userId && SERVICE_KEY) {
+    try {
+      const url =
+        `${SUPABASE_URL}/rest/v1/food_corrections` +
+        `?user_id=eq.${encodeURIComponent(userId)}` +
+        `&order=created_at.desc&limit=8` +
+        `&select=original_name,corrected_name,original_calories,corrected_calories`
+      const cRes = await fetch(url, {
+        headers: {
+          apikey: SERVICE_KEY,
+          Authorization: `Bearer ${SERVICE_KEY}`,
+        },
+      })
+      if (cRes.ok) {
+        const corrections = (await cRes.json()) as Array<{
+          original_name?: string
+          corrected_name?: string
+          original_calories?: number
+          corrected_calories?: number
+        }>
+        if (Array.isArray(corrections) && corrections.length > 0) {
+          const list = corrections
+            .slice(0, 8)
+            .map(
+              (c) =>
+                `${c.original_name ?? '?'} → ${c.corrected_name ?? '?'} (${c.original_calories ?? '?'} cal → ${c.corrected_calories ?? '?'} cal)`
+            )
+            .join(', ')
+          correctionHint =
+            ` Note — this user has previously corrected your estimates. Lean toward their preferences: [${list}].` +
+            ` Use these to calibrate naming and portion/calorie estimates.`
+        }
+      }
+    } catch {
+      // ignore — proceed without correction context
+    }
+  }
+
   const anthropicBody = {
     model: 'claude-sonnet-4-6',
     max_tokens: 500,
@@ -77,7 +122,7 @@ export default async function handler(req: Request): Promise<Response> {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType, data } },
-          { type: 'text', text: contextLine },
+          { type: 'text', text: contextLine + correctionHint },
         ],
       },
     ],

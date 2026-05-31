@@ -21,7 +21,7 @@ function normalizeItems(raw: unknown): FoodItem[] {
 
 export async function analyzeFoodImage(
   base64Image: string,
-  context?: { cuisine?: string | null; dietary?: string | null }
+  context?: { cuisine?: string | null; dietary?: string | null; userId?: string | null }
 ): Promise<FoodItem[]> {
   const res = await fetch('/api/analyze', {
     method: 'POST',
@@ -30,6 +30,7 @@ export async function analyzeFoodImage(
       image: base64Image,
       cuisine: context?.cuisine ?? '',
       dietary: context?.dietary ?? '',
+      userId: context?.userId ?? '',
     }),
   })
   if (!res.ok) throw new Error(`Analyze failed (${res.status})`)

@@ -134,6 +134,9 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
   // Edit state (result step)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<Partial<FoodItem>>({})
+  // Original AI-detected item captured when editing begins — used to detect
+  // user corrections and feed them back into future analyses.
+  const editOriginalRef = useRef<FoodItem | null>(null)
 
   // Sage healthier-swap suggestion (result step)
   const [swapText, setSwapText] = useState<string | null>(null)
@@ -194,7 +197,7 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
     setPreviewUrl(dataUrl)
     setBase64(dataUrl)
     setStep('analyzing')
-    analyzeFoodImage(dataUrl, { cuisine: profile?.cuisine_pref, dietary: profile?.dietary_prefs })
+    analyzeFoodImage(dataUrl, { cuisine: profile?.cuisine_pref, dietary: profile?.dietary_prefs, userId: user?.id })
       .then((detected) => {
         setItems(detected)
         setStep('result')
@@ -370,7 +373,7 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
       setBase64(dataUrl)
       setStep('analyzing')
       try {
-        const detected = await analyzeFoodImage(dataUrl, { cuisine: profile?.cuisine_pref, dietary: profile?.dietary_prefs })
+        const detected = await analyzeFoodImage(dataUrl, { cuisine: profile?.cuisine_pref, dietary: profile?.dietary_prefs, userId: user?.id })
         setItems(detected)
         setStep('result')
       } catch {
@@ -564,26 +567,60 @@ Accurate nutritional estimates for typical local portion sizes.`,
   function startEdit(item: FoodItem) {
     setEditingId(item.id)
     setEditDraft({ ...item })
+    // Snapshot the original detected values so we can detect a real correction.
+    editOriginalRef.current = { ...item }
+  }
+
+  // Fire-and-forget: log a correction when the user meaningfully changes an
+  // AI-detected item (different name, or calories off by >5%). These feed back
+  // into future analyses as the user's preferences. Never blocks the UI.
+  function recordCorrection(original: FoodItem, edited: FoodItem) {
+    if (!user) return
+    const nameChanged =
+      original.name.trim().toLowerCase() !== edited.name.trim().toLowerCase()
+    const base = original.calories || 0
+    const calChanged =
+      base > 0
+        ? Math.abs(edited.calories - base) / base > 0.05
+        : edited.calories !== base
+    if (!nameChanged && !calChanged) return
+    ;(async () => {
+      try {
+        await supabase.from('food_corrections').insert({
+          user_id: user.id,
+          original_name: original.name,
+          corrected_name: edited.name,
+          original_calories: original.calories,
+          corrected_calories: edited.calories,
+        })
+      } catch {
+        // ignore — correction logging is best-effort
+      }
+    })()
   }
 
   function commitEdit() {
     if (!editingId) return
+    const original = editOriginalRef.current
+    const edited: FoodItem | null = (() => {
+      const item = items.find((it) => it.id === editingId)
+      if (!item) return null
+      return {
+        ...item,
+        name: String(editDraft.name ?? item.name),
+        calories: Number(editDraft.calories ?? item.calories),
+        protein: Number(editDraft.protein ?? item.protein),
+        carbs: Number(editDraft.carbs ?? item.carbs),
+        fat: Number(editDraft.fat ?? item.fat),
+      }
+    })()
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === editingId
-          ? {
-              ...item,
-              name: String(editDraft.name ?? item.name),
-              calories: Number(editDraft.calories ?? item.calories),
-              protein: Number(editDraft.protein ?? item.protein),
-              carbs: Number(editDraft.carbs ?? item.carbs),
-              fat: Number(editDraft.fat ?? item.fat),
-            }
-          : item
-      )
+      prev.map((item) => (item.id === editingId && edited ? edited : item))
     )
+    if (original && edited) recordCorrection(original, edited)
     setEditingId(null)
     setEditDraft({})
+    editOriginalRef.current = null
   }
 
   const viewfinderBg = {
