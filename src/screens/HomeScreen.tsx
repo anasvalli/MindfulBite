@@ -172,15 +172,16 @@ export function HomeScreen({ go }: HomeScreenProps) {
       }}
     >
       {/* Greeting */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-        <div>
-          <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 2 }}>{todayLabel()}</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ color: 'var(--text-dim)', fontSize: 12, marginBottom: 3 }}>{todayLabel()}</p>
           <h1
             style={{
-              fontFamily: 'var(--serif)',
-              fontSize: 26,
-              fontWeight: 500,
-              letterSpacing: '-0.01em',
+              fontFamily: 'var(--sans)',
+              fontSize: 24,
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              lineHeight: 1.15,
               color: 'var(--text)',
             }}
           >
@@ -274,9 +275,9 @@ export function HomeScreen({ go }: HomeScreenProps) {
                 { label: t('home.goal'), val: `${Math.round(goal)} kcal`, color: 'var(--text-muted)' },
                 { label: t('home.remaining'), val: `${Math.round(left)} kcal`, color: 'var(--accent)' },
               ].map(({ label, val, color }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</span>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color }}>{val}</span>
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-dim)', flexShrink: 0 }}>{label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color, whiteSpace: 'nowrap', textAlign: 'right' }}>{val}</span>
                 </div>
               ))}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>

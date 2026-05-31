@@ -22,27 +22,6 @@ interface MealPlanItem {
 
 const MEAL_PLAN_KEY = 'mealPlan'
 
-function IconCalendar({ size = 24 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ width: size, height: size, flexShrink: 0 }}
-    >
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  )
-}
-
 export function MealPlanScreen({ go }: MealPlanScreenProps) {
   const { profile, user } = useAuth()
   const [plan, setPlan] = useState<MealPlanItem[] | null>(null)
@@ -204,18 +183,15 @@ Make meals culturally appropriate for my diet preferences. Total should be close
           </button>
           <h2
             style={{
-              fontFamily: 'var(--serif)',
+              fontFamily: 'var(--sans)',
               fontSize: 22,
-              fontWeight: 500,
+              fontWeight: 700,
               color: 'var(--text)',
-              letterSpacing: '-0.01em',
+              letterSpacing: '-0.02em',
             }}
           >
             Meal Plan
           </h2>
-        </div>
-        <div style={{ color: 'var(--text-dim)', padding: 4 }}>
-          <IconCalendar size={20} />
         </div>
       </div>
 

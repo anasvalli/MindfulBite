@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { Card, Eyebrow, Spinner } from '../components/ui'
-import { IconChevL, IconCheck, IconClock } from '../components/icons'
+import { IconChevL, IconCheck } from '../components/icons'
 import { MOOD_HUES, MOOD_EMOJIS } from '../lib/moods'
 
 interface TodayCheckin {
@@ -233,19 +233,18 @@ export function MoodScreen({ go }: MoodScreenProps) {
         </button>
         <h2
           style={{
-            fontFamily: 'var(--serif)',
+            fontFamily: 'var(--sans)',
             fontSize: 22,
-            fontWeight: 500,
+            fontWeight: 700,
             color: 'var(--text)',
-            letterSpacing: '-0.01em',
+            letterSpacing: '-0.02em',
             margin: 0,
           }}
         >
           Mood
         </h2>
-        <div style={{ color: 'var(--text-dim)', display: 'flex', alignItems: 'center', padding: 4 }}>
-          <IconClock size={18} />
-        </div>
+        {/* Spacer to keep the title centered (removed non-functional clock icon) */}
+        <div style={{ width: 28 }} />
       </div>
 
       {/* Prompt */}

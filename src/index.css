@@ -27,10 +27,12 @@
   /* Danger */
   --danger: oklch(0.65 0.18 25);
 
-  /* Fonts */
-  --serif: 'Cormorant Garamond', serif;
-  --sans: 'Hanken Grotesk', sans-serif;
-  --mono: 'IBM Plex Mono', monospace;
+  /* Typography — single family (Hanken Grotesk) throughout. Hierarchy comes from
+     size + weight, not from mixing serif/sans/mono. The aliases are kept so existing
+     screens keep working; they all resolve to the same family now. */
+  --sans: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  --serif: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  --mono: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
 }
 
 *,
@@ -59,6 +61,8 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Numbers align consistently across the app now that there's no mono font */
+  font-variant-numeric: tabular-nums;
   /* Prevent pull-to-refresh / overscroll bounce so it feels app-like */
   overscroll-behavior: none;
 }
