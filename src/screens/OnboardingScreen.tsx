@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { Ring } from '../components/ui'
 import { calculateMacroTargets } from '../lib/macros'
+import { GOALS } from '../lib/goals'
 
 interface OnboardingScreenProps {
   go: (screen: string) => void
@@ -353,12 +354,14 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 // ─── Step 1 props & component (module-level — stable reference) ───────────────
 
 interface Step1Props {
+  primaryGoal: string
   firstName: string
   lastName: string
   formUsername: string
   dob: string
   formGender: GenderKey
   calculatedAge: number | null
+  setPrimaryGoal: (v: string) => void
   setFirstName: (v: string) => void
   setLastName: (v: string) => void
   setFormUsername: (v: string) => void
@@ -368,12 +371,14 @@ interface Step1Props {
 }
 
 function Step1({
+  primaryGoal,
   firstName,
   lastName,
   formUsername,
   dob,
   formGender,
   calculatedAge,
+  setPrimaryGoal,
   setFirstName,
   setLastName,
   setFormUsername,
@@ -382,6 +387,7 @@ function Step1({
   onContinue,
 }: Step1Props) {
   const canContinue =
+    primaryGoal.length > 0 &&
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
     formUsername.trim().length > 0 &&
@@ -402,6 +408,67 @@ function Step1({
         title="Who are you?"
         subtitle="A few quick questions so MindfulBite can personalize your plan"
       />
+
+      {/* Primary Goal — the anchor of the flow */}
+      <div>
+        <label style={labelStyle}>What's your main goal?</label>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 8,
+          }}
+        >
+          {GOALS.map((g) => {
+            const selected = primaryGoal === g.key
+            return (
+              <button
+                key={g.key}
+                type="button"
+                onClick={() => setPrimaryGoal(g.key)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: 4,
+                  padding: '14px 14px',
+                  borderRadius: 16,
+                  border: selected
+                    ? '1px solid var(--accent-line)'
+                    : '1px solid var(--line)',
+                  background: selected ? 'var(--accent-wash)' : 'var(--surface)',
+                  color: selected ? 'var(--accent)' : 'var(--text)',
+                  fontFamily: 'var(--sans)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <span style={{ fontSize: 22, lineHeight: 1 }}>{g.emoji}</span>
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: selected ? 'var(--accent)' : 'var(--text)',
+                  }}
+                >
+                  {g.label}
+                </span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 400,
+                    color: selected ? 'var(--accent)' : 'var(--text-dim)',
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {g.blurb}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       {/* First Name */}
       <div>
@@ -1396,6 +1463,7 @@ export function OnboardingScreen({ go }: OnboardingScreenProps) {
   const [error, setError] = useState<string | null>(null)
 
   // Step 1 — Personal Info
+  const [primaryGoal, setPrimaryGoal] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [formUsername, setFormUsername] = useState('')
@@ -1540,6 +1608,7 @@ export function OnboardingScreen({ go }: OnboardingScreenProps) {
       const { error: err } = await supabase.from('users').upsert(
         {
           id: user.id,
+          primary_goal: primaryGoal || null,
           full_name: fullName || null,
           username: formUsername || null,
           age: calculatedAge ?? null,
@@ -1600,12 +1669,14 @@ export function OnboardingScreen({ go }: OnboardingScreenProps) {
       >
         {step === 1 && (
           <Step1
+            primaryGoal={primaryGoal}
             firstName={firstName}
             lastName={lastName}
             formUsername={formUsername}
             dob={dob}
             formGender={formGender}
             calculatedAge={calculatedAge}
+            setPrimaryGoal={setPrimaryGoal}
             setFirstName={setFirstName}
             setLastName={setLastName}
             setFormUsername={setFormUsername}

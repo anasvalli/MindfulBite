@@ -7,10 +7,15 @@ import { Card, Eyebrow, Spinner } from '../components/ui'
 import { IconChevL, IconChevR, IconCamera } from '../components/icons'
 import type { User } from '../types'
 import { calculateMacroTargets } from '../lib/macros'
+import { GOALS, goalFor } from '../lib/goals'
 import {
   isNotificationsEnabled,
   requestNotificationPermission,
   scheduleMealReminders,
+  getReminderPrefs,
+  setReminderPrefs,
+  scheduleAllReminders,
+  type ReminderPrefs,
 } from '../lib/notifications'
 
 interface SettingsScreenProps {
@@ -48,7 +53,7 @@ interface EditField {
   key: string
   label: string
   value: string
-  type: 'number' | 'prefs' | 'cuisine'
+  type: 'number' | 'prefs' | 'cuisine' | 'goal'
 }
 
 const DIETARY_PREFS = [
@@ -100,6 +105,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [notifEnabled, setNotifEnabled] = useState(isNotificationsEnabled())
+  const [reminderPrefs, setReminderPrefsState] = useState<ReminderPrefs>(getReminderPrefs())
 
   // Backfill macro targets for users who onboarded before they existed:
   // if they have weight + a calorie goal but no macro targets, compute & persist once.
@@ -120,6 +126,21 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, profile?.protein_goal, profile?.weight, profile?.daily_calorie_goal])
 
+  function rescheduleReminders(prefs: ReminderPrefs) {
+    let mealPlan: any[] | null = null
+    try {
+      mealPlan = JSON.parse(localStorage.getItem('mealPlan') || 'null')
+    } catch {
+      mealPlan = null
+    }
+    scheduleAllReminders({
+      wakeTime: profile?.wake_time,
+      sleepTime: profile?.sleep_time,
+      mealPlan,
+      prefs,
+    })
+  }
+
   async function toggleNotifications() {
     if (notifEnabled) {
       // Can't programmatically revoke — just inform
@@ -133,8 +154,17 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
         if (raw) {
           try { scheduleMealReminders(JSON.parse(raw)) } catch {}
         }
+        // Re-schedule rich reminders based on saved prefs
+        rescheduleReminders(reminderPrefs)
       }
     }
+  }
+
+  function toggleReminderPref(key: keyof ReminderPrefs) {
+    const next = { ...reminderPrefs, [key]: !reminderPrefs[key] }
+    setReminderPrefsState(next)
+    setReminderPrefs(next)
+    if (notifEnabled) rescheduleReminders(next)
   }
 
   function openEdit(field: EditField) {
@@ -172,6 +202,9 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
     }
     if (editField.key === 'cuisine_pref') {
       update.cuisine_pref = editValue.trim() || null
+    }
+    if (editField.key === 'primary_goal') {
+      update.primary_goal = editValue || null
     }
     if (editField.key === 'protein_goal') update.protein_goal = Number(editValue)
     if (editField.key === 'carbs_goal') update.carbs_goal = Number(editValue)
@@ -299,8 +332,19 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
     rawValue: string | null
     displayValue: string
     editable: boolean
-    type: 'number' | 'prefs' | 'cuisine'
+    type: 'number' | 'prefs' | 'cuisine' | 'goal'
   }> = [
+    {
+      key: 'primary_goal',
+      label: 'Goal',
+      rawValue: profile?.primary_goal ?? '',
+      displayValue: (() => {
+        const g = goalFor(profile?.primary_goal)
+        return g ? `${g.emoji} ${g.label}` : 'Not set'
+      })(),
+      editable: true,
+      type: 'goal',
+    },
     {
       key: 'daily_calorie_goal',
       label: 'Daily Calorie Goal',
@@ -747,7 +791,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
               </div>
             </div>
 
-            {/* Notifications */}
+            {/* Notifications master toggle */}
             <div
               onClick={toggleNotifications}
               style={{
@@ -786,6 +830,58 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 />
               </div>
             </div>
+
+            {/* Reminders sub-toggles */}
+            {([
+              { key: 'meals' as const, label: 'Meal reminders' },
+              { key: 'water' as const, label: 'Water reminders' },
+              { key: 'windDown' as const, label: 'Wind-down reminder' },
+            ]).map(({ key, label }) => {
+              const on = reminderPrefs[key]
+              const disabled = !notifEnabled
+              return (
+                <div
+                  key={key}
+                  onClick={() => { if (!disabled) toggleReminderPref(key) }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 18px 12px 30px',
+                    borderBottom: '1px solid var(--line)',
+                    cursor: disabled ? 'default' : 'pointer',
+                    opacity: disabled ? 0.5 : 1,
+                  }}
+                >
+                  <span style={{ fontSize: 13.5, color: 'var(--text-muted)' }}>{label}</span>
+                  <div
+                    style={{
+                      width: 46,
+                      height: 26,
+                      borderRadius: 100,
+                      background: on && !disabled ? 'var(--accent)' : 'var(--surface-2)',
+                      border: '1px solid var(--line)',
+                      position: 'relative',
+                      transition: 'background 0.2s',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 2,
+                        left: on ? 22 : 2,
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        background: on && !disabled ? 'var(--on-accent)' : 'var(--text-dim)',
+                        transition: 'left 0.2s',
+                      }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
 
             {/* App Version */}
             <div
@@ -1119,6 +1215,50 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                   placeholder="e.g. Sri Lankan, Persian, Lebanese"
                   style={{ ...inputStyle, marginTop: 6 }}
                 />
+              </div>
+            )}
+
+            {editField.type === 'goal' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {GOALS.map((g) => {
+                  const selected = editValue === g.key
+                  return (
+                    <button
+                      key={g.key}
+                      onClick={() => setEditValue(g.key)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 14,
+                        textAlign: 'left',
+                        width: '100%',
+                        padding: '14px 16px',
+                        borderRadius: 16,
+                        border: selected ? '1px solid var(--accent-line)' : '1px solid var(--line)',
+                        background: selected ? 'var(--accent-wash)' : 'var(--surface-2)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <span style={{ fontSize: 24, lineHeight: 1 }}>{g.emoji}</span>
+                      <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                        <span
+                          style={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: selected ? 'var(--accent)' : 'var(--text)',
+                            fontFamily: 'var(--sans)',
+                          }}
+                        >
+                          {g.label}
+                        </span>
+                        <span style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--sans)' }}>
+                          {g.blurb}
+                        </span>
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             )}
 

@@ -9,6 +9,8 @@ import { parseTime12h } from '../lib/time'
 import { computeStreak } from '../lib/streaks'
 import { StreakBadge } from '../components/StreakBadge'
 import { WeeklyRecap } from '../components/WeeklyRecap'
+import { goalFor } from '../lib/goals'
+import { isNotificationsEnabled, getReminderPrefs, scheduleAllReminders } from '../lib/notifications'
 
 interface HomeScreenProps {
   go: (screen: string) => void
@@ -51,6 +53,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
   const [nextMeal, setNextMeal] = useState<{ meal: PlanMeal; secondsLeft: number } | null>(null)
   const [streak, setStreak] = useState(0)
   const [showRecap, setShowRecap] = useState(false)
+  const [insight, setInsight] = useState<{ insight: string; cta?: string } | null>(null)
 
   const goal = profile?.daily_calorie_goal ?? 2150
   const eaten = meals.reduce((s, m) => s + (m.total_calories ?? 0), 0)
@@ -104,6 +107,54 @@ export function HomeScreen({ go }: HomeScreenProps) {
 
     load()
   }, [user])
+
+  // Proactive "Insight of the day" — one cheap call per user per day, cached.
+  useEffect(() => {
+    if (!user) return
+    const today = new Date().toISOString().split('T')[0]
+    const cacheKey = `dailyInsight_${user.id}_${today}`
+    const cached = localStorage.getItem(cacheKey)
+    if (cached) {
+      try {
+        const v = JSON.parse(cached)
+        if (v?.insight) setInsight(v)
+      } catch { /* ignore */ }
+      return
+    }
+    async function fetchInsight() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/daily-insight', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+          body: JSON.stringify({}),
+        })
+        if (!res.ok) return
+        const data = await res.json() as { insight: string | null; cta?: string }
+        if (data?.insight) {
+          setInsight({ insight: data.insight, cta: data.cta })
+          localStorage.setItem(cacheKey, JSON.stringify(data))
+        }
+      } catch { /* non-blocking */ }
+    }
+    fetchInsight()
+  }, [user])
+
+  // Re-arm reminders each time the app opens (setTimeout-based, so they fire
+  // while the session is open; true background push is a later enhancement).
+  useEffect(() => {
+    if (!isNotificationsEnabled()) return
+    const prefs = getReminderPrefs()
+    if (!prefs.meals && !prefs.water && !prefs.windDown) return
+    let mealPlan: unknown = null
+    try { mealPlan = JSON.parse(localStorage.getItem('mealPlan') || 'null') } catch { /* ignore */ }
+    scheduleAllReminders({
+      wakeTime: profile?.wake_time,
+      sleepTime: profile?.sleep_time,
+      mealPlan: Array.isArray(mealPlan) ? mealPlan : null,
+      prefs,
+    })
+  }, [profile?.wake_time, profile?.sleep_time])
 
   // Animate ring on mount
   useEffect(() => {
@@ -216,6 +267,41 @@ export function HomeScreen({ go }: HomeScreenProps) {
       </div>
 
       {showRecap && user && <WeeklyRecap userId={user.id} onClose={() => setShowRecap(false)} />}
+
+      {/* Proactive Sage — Insight of the day */}
+      {insight && (
+        <button
+          onClick={() => go('coach')}
+          className="mb-press"
+          style={{
+            background: 'var(--accent-wash)',
+            border: '1px solid var(--accent-line)',
+            borderRadius: 18,
+            padding: '14px 16px',
+            cursor: 'pointer',
+            textAlign: 'left',
+            width: '100%',
+            display: 'flex',
+            gap: 12,
+            alignItems: 'flex-start',
+          }}
+        >
+          <div style={{ width: 30, height: 30, borderRadius: 10, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>
+            🌿
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 10.5, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.12em', marginBottom: 4 }}>
+              ✦ SAGE NOTICED
+            </div>
+            <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>{insight.insight}</div>
+            {insight.cta && (
+              <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, marginTop: 6 }}>
+                {insight.cta} →
+              </div>
+            )}
+          </div>
+        </button>
+      )}
 
       {/* Next Meal countdown */}
       {nextMeal && (
@@ -444,6 +530,46 @@ export function HomeScreen({ go }: HomeScreenProps) {
       >
         View your weekly insights <IconTrend size={14} />
       </button>
+
+      {/* Goal progress */}
+      {(() => {
+        const g = goalFor(profile?.primary_goal)
+        if (!g) return null
+        const w = profile?.weight ?? null
+        const gw = profile?.goal_weight ?? null
+        let progressPct: number | null = null
+        let detail = g.blurb
+        if (g.metric === 'weight' && w != null && gw != null && w !== gw) {
+          // Progress isn't truly knowable without a start weight; show distance to goal.
+          const remaining = Math.abs(w - gw)
+          detail = remaining < 0.5 ? 'At your goal weight 🎯' : `${remaining.toFixed(1)} kg to your goal (${gw} kg)`
+          progressPct = Math.max(0.05, Math.min(1, 1 - remaining / Math.max(w, gw)))
+        } else if (g.metric === 'protein' && profile?.protein_goal) {
+          detail = `Aim for ${Math.round(profile.protein_goal)}g protein daily`
+        }
+        return (
+          <Card>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', fontSize: 20, flexShrink: 0 }}>
+                {g.emoji}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <Eyebrow>Your goal</Eyebrow>
+                  <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>🔥 {streak}d</span>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginTop: 2 }}>{g.label}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{detail}</div>
+                {progressPct != null && (
+                  <div style={{ height: 5, borderRadius: 5, background: 'var(--ring-track)', overflow: 'hidden', marginTop: 8 }}>
+                    <div style={{ height: '100%', width: `${progressPct * 100}%`, background: 'var(--accent)', borderRadius: 5, transition: 'width 0.6s ease' }} />
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        )
+      })()}
 
       {/* Quick track row */}
       <div style={{ display: 'flex', gap: 8 }}>

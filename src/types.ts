@@ -23,6 +23,7 @@ export interface User {
   cuisine_pref?: string | null
   allergies?: string | null
   dob?: string | null
+  primary_goal?: string | null
   created_at: string
 }
 

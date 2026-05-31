@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import type { ChatMessage, Meal, MealMood } from '../types'
 import { IconClose, IconSend } from '../components/icons'
 import { isAtChatLimit, incrementChatCount, remainingChats } from '../lib/chatLimits'
+import { goalContext } from '../lib/goals'
 
 interface CoachScreenProps {
   go: (screen: string) => void
@@ -175,6 +176,7 @@ export function CoachScreen({ go }: CoachScreenProps) {
 
         const ctx = [
           `User: ${profile?.full_name ?? 'Unknown'}`,
+          `Primary goal: ${goalContext(profile?.primary_goal)}`,
           `Goal: ${profile?.daily_calorie_goal ?? 2150} kcal/day`,
           `Protein target: ${profile?.protein_goal ?? 'not set'}g/day`,
           `Carbs target: ${profile?.carbs_goal ?? 'not set'}g/day`,
