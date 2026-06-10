@@ -8,6 +8,27 @@ export const config = { runtime: 'edge' }
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://ebnamzpofmlhlnzgvkbe.supabase.co'
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+// Food identification runs on Gemini (stronger food recognition).
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? ''
+
+// Stage 1 — identify the food via Gemini vision. Returns raw model text (JSON array).
+async function identifyFood(prompt: string, mediaType: string, data: string): Promise<string> {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        // Gemini has no separate system role — prepend the instructions.
+        contents: [{ parts: [{ inlineData: { mimeType: mediaType, data } }, { text: `${SYSTEM_PROMPT}\n\n${prompt}` }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 1200, thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' },
+      }),
+    },
+  )
+  if (!res.ok) throw new Error(`Gemini error: ${await res.text()}`)
+  const j = (await res.json()) as any
+  return j?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '[]'
+}
 
 const SYSTEM_PROMPT = `You are an expert nutritionist and chef with deep knowledge of global cuisines, including South Asian (Pakistani, Indian, Bangladeshi), Middle Eastern, and beverages. You analyze food AND drink photos with great care and precision.
 
@@ -76,9 +97,8 @@ export default async function handler(req: Request): Promise<Response> {
   }
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'API key not configured' }), {
+  if (!GEMINI_API_KEY) {
+    return new Response(JSON.stringify({ error: 'Gemini API key not configured' }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
     })
   }
@@ -152,43 +172,8 @@ export default async function handler(req: Request): Promise<Response> {
     }
   }
 
-  const anthropicBody = {
-    model: 'claude-sonnet-4-6',
-    max_tokens: 500,
-    system: [
-      { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
-    ],
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType, data } },
-          { type: 'text', text: contextLine + correctionHint },
-        ],
-      },
-    ],
-  }
-
   try {
-    const res = await fetch(ANTHROPIC_API_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify(anthropicBody),
-    })
-
-    if (!res.ok) {
-      const errText = await res.text()
-      return new Response(JSON.stringify({ error: 'AI service error', details: errText }), {
-        status: 502, headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    const json = (await res.json()) as { content: Array<{ type: string; text: string }> }
-    const text = json.content?.find((c) => c.type === 'text')?.text ?? '[]'
+    const text = await identifyFood(contextLine + correctionHint, mediaType, data)
     const match = text.match(/\[[\s\S]*\]/)
     let parsed: any[] = []
     try {
@@ -221,7 +206,9 @@ export default async function handler(req: Request): Promise<Response> {
           quantity: String(it.quantity ?? '1 serving'),
           grams: grams || undefined,
           confidence: typeof it.confidence === 'number' ? it.confidence : undefined,
-          alternatives: Array.isArray(it.alternatives) ? it.alternatives.slice(0, 2).map(String) : [],
+          alternatives: Array.isArray(it.alternatives)
+            ? it.alternatives.slice(0, 2).map((a: any) => (typeof a === 'string' ? a : String(a?.name ?? ''))).filter(Boolean)
+            : [],
           calories: Math.round(Number(it.calories) || 0),
           protein: Math.round(Number(it.protein) || 0),
           carbs: Math.round(Number(it.carbs) || 0),

@@ -4,13 +4,45 @@ import { supabase } from '../lib/supabase'
 import { Card, Eyebrow, Spinner } from '../components/ui'
 import { IconChevL, IconPlus } from '../components/icons'
 import { scheduleMealReminders, isNotificationsEnabled } from '../lib/notifications'
+import { parseTime12h } from '../lib/time'
 
 interface MealPlanScreenProps {
   go: (screen: string) => void
 }
 
+// Compute meal times that respect the user's actual wake/sleep window.
+// breakfast ≈ 45m after waking, dinner ≈ 2.5h before sleep, lunch & snack spread between.
+function computeMealTimes(wake: string | null | undefined, sleep: string | null | undefined): Record<MealType, string> {
+  const toMin = (s: string | null | undefined, def: number): number => {
+    const d = s ? parseTime12h(s) : null
+    return d ? d.getHours() * 60 + d.getMinutes() : def
+  }
+  const fmt = (mins: number): string => {
+    let m = ((mins % 1440) + 1440) % 1440
+    let h = Math.floor(m / 60)
+    const mm = Math.round(m % 60)
+    const ap = h < 12 ? 'AM' : 'PM'
+    h = h % 12 === 0 ? 12 : h % 12
+    return `${h}:${String(mm).padStart(2, '0')} ${ap}`
+  }
+  const wakeMin = toMin(wake, 8 * 60) // default 8:00 AM
+  let sleepMin = toMin(sleep, 23 * 60) // default 11:00 PM
+  if (sleepMin <= wakeMin) sleepMin += 24 * 60 // sleeps past midnight
+  const breakfast = wakeMin + 45
+  const dinner = sleepMin - 150
+  const span = Math.max(120, dinner - breakfast)
+  return {
+    breakfast: fmt(breakfast),
+    lunch: fmt(breakfast + span * 0.42),
+    snacks: fmt(breakfast + span * 0.7),
+    dinner: fmt(dinner),
+  }
+}
+
+type MealType = 'breakfast' | 'lunch' | 'snacks' | 'dinner'
+
 interface MealPlanItem {
-  type: 'breakfast' | 'lunch' | 'snacks' | 'dinner'
+  type: MealType
   name: string
   calories: number
   emoji: string
@@ -61,14 +93,16 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
           : 'maintain weight'
         : 'maintain weight'
 
+    const times = computeMealTimes(profile?.wake_time, profile?.sleep_time)
     const message = `Generate a 1-day meal plan for me. My cuisine preference is ${cuisine}. Make all meals authentic to ${cuisine} cuisine.
 My profile: ${prefs} diet, ${goal} kcal daily goal, goal: ${weightGoal}.
+I wake at ${profile?.wake_time ?? '8:00 AM'} and sleep at ${profile?.sleep_time ?? '11:00 PM'}, so use EXACTLY these meal times: breakfast ${times.breakfast}, lunch ${times.lunch}, snacks ${times.snacks}, dinner ${times.dinner}.
 Return ONLY a JSON array, no text before or after:
 [
-  {"type":"breakfast","name":"meal name","calories":N,"emoji":"🍳","time":"8:00 AM","protein":N,"carbs":N,"fat":N},
-  {"type":"lunch","name":"meal name","calories":N,"emoji":"🥗","time":"1:00 PM","protein":N,"carbs":N,"fat":N},
-  {"type":"snacks","name":"meal name","calories":N,"emoji":"🍎","time":"4:00 PM","protein":N,"carbs":N,"fat":N},
-  {"type":"dinner","name":"meal name","calories":N,"emoji":"🍽️","time":"7:30 PM","protein":N,"carbs":N,"fat":N}
+  {"type":"breakfast","name":"meal name","calories":N,"emoji":"🍳","time":"${times.breakfast}","protein":N,"carbs":N,"fat":N},
+  {"type":"lunch","name":"meal name","calories":N,"emoji":"🥗","time":"${times.lunch}","protein":N,"carbs":N,"fat":N},
+  {"type":"snacks","name":"meal name","calories":N,"emoji":"🍎","time":"${times.snacks}","protein":N,"carbs":N,"fat":N},
+  {"type":"dinner","name":"meal name","calories":N,"emoji":"🍽️","time":"${times.dinner}","protein":N,"carbs":N,"fat":N}
 ]
 Make meals culturally appropriate for my diet preferences. Total should be close to ${goal} kcal.`
 
@@ -104,6 +138,11 @@ Make meals culturally appropriate for my diet preferences. Total should be close
       if (!Array.isArray(items) || items.length === 0) {
         throw new Error('Empty meal plan returned.')
       }
+
+      // Guarantee times respect the user's wake/sleep window, regardless of the model.
+      items.forEach((it) => {
+        if (times[it.type]) it.time = times[it.type]
+      })
 
       setPlan(items)
       localStorage.setItem(MEAL_PLAN_KEY, JSON.stringify(items))
