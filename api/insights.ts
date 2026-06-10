@@ -1,9 +1,12 @@
 // Vercel Edge Function — generates clinical insight reports using Claude Sonnet
-// Receives pre-fetched user data from frontend, returns structured report
+// Receives pre-fetched user data from frontend, returns structured report.
+// JWT-verified: only signed-in users may trigger a (paid) Sonnet generation.
 
 export const config = { runtime: 'edge' }
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
+const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://ebnamzpofmlhlnzgvkbe.supabase.co'
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? ''
 
 interface MealDay { date: string; calories: number; protein: number; carbs: number; fat: number }
 interface MoodDay { date: string; mood: string; intensity: number }
@@ -22,13 +25,29 @@ export default async function handler(req: Request): Promise<Response> {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
     })
   }
 
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
+  }
+
+  // Verify the caller is a signed-in user before spending Anthropic tokens.
+  const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+  let authed = false
+  if (token && SUPABASE_ANON_KEY) {
+    const u = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+    })
+    authed = u.ok
+  }
+  if (!authed) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY

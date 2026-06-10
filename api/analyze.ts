@@ -1,12 +1,13 @@
-// Vercel Edge Function — food image analysis via Claude Sonnet vision.
-// Accuracy-first: Sonnet 4.6 (best vision), cuisine/diet context injected so
-// the model reasons about the user's actual food culture instead of defaulting
-// to generic Western items. Prompt-cached system instructions keep cost down.
+// Vercel Edge Function — food image analysis via Gemini vision (Stage 1),
+// verified against USDA FoodData Central (Stage 2), calibrated by the user's
+// own correction history (Stage 3). Cuisine/diet context injected so the model
+// reasons about the user's actual food culture instead of defaulting to
+// generic Western items.
 
 export const config = { runtime: 'edge' }
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'https://ebnamzpofmlhlnzgvkbe.supabase.co'
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? ''
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 // Food identification runs on Gemini (stronger food recognition).
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? ''
@@ -103,7 +104,7 @@ export default async function handler(req: Request): Promise<Response> {
     })
   }
 
-  let body: { image?: string; cuisine?: string; dietary?: string; userId?: string }
+  let body: { image?: string; cuisine?: string; dietary?: string }
   try {
     body = await req.json()
   } catch {
@@ -129,11 +130,23 @@ export default async function handler(req: Request): Promise<Response> {
     `User context — cuisine preference: ${cuisine || 'unspecified'}; dietary: ${dietary || 'none'}. ` +
     `Use the cuisine to name ambiguous dishes (e.g. South Asian → name the specific karahi/biryani/daal rather than guessing the country). Beverages like chai, coffee, lassi count — identify and estimate them. Analyze the food or drink and return the JSON array.`
 
-  // Correction-memory feedback loop: if we know the user and have a service key,
-  // pull their recent corrections so the model calibrates to their preferences.
-  // Best-effort only — never block or break analysis.
+  // Correction-memory feedback loop: pull the caller's recent corrections so
+  // the model calibrates to their preferences. The user is derived from the
+  // verified JWT — never from the request body, so one user can never read
+  // another's correction history. Best-effort only — analysis works without it.
   let correctionHint = ''
-  const userId = (body.userId ?? '').trim()
+  let userId = ''
+  const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (token && SUPABASE_ANON_KEY) {
+    try {
+      const u = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+      })
+      if (u.ok) userId = ((await u.json()) as { id?: string }).id ?? ''
+    } catch {
+      // ignore — proceed without correction context
+    }
+  }
   if (userId && SERVICE_KEY) {
     try {
       const url =

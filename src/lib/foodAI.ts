@@ -1,6 +1,7 @@
-// Client-side food AI — calls server-side Claude edge functions.
-// No API key in the browser; key stays server-side in Vercel.
+// Client-side food AI — calls server-side AI edge functions.
+// No API key in the browser; keys stay server-side in Vercel.
 
+import { supabase } from './supabase'
 import type { FoodItem } from '../types'
 
 function normalizeItems(raw: unknown): FoodItem[] {
@@ -25,16 +26,20 @@ function normalizeItems(raw: unknown): FoodItem[] {
 
 export async function analyzeFoodImage(
   base64Image: string,
-  context?: { cuisine?: string | null; dietary?: string | null; userId?: string | null }
+  context?: { cuisine?: string | null; dietary?: string | null }
 ): Promise<FoodItem[]> {
+  // JWT lets the server pull this user's correction history (server verifies it).
+  const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch('/api/analyze', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session?.access_token ?? ''}`,
+    },
     body: JSON.stringify({
       image: base64Image,
       cuisine: context?.cuisine ?? '',
       dietary: context?.dietary ?? '',
-      userId: context?.userId ?? '',
     }),
   })
   if (!res.ok) throw new Error(`Analyze failed (${res.status})`)

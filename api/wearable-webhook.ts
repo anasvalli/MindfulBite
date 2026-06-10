@@ -41,9 +41,8 @@ async function sb(method: string, path: string, body?: unknown, prefer?: string)
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
-  // Auth: shared secret via header or ?secret=
-  const url = new URL(req.url)
-  const provided = req.headers.get('x-webhook-secret') ?? url.searchParams.get('secret') ?? ''
+  // Auth: shared secret via header only — query params can leak into access logs.
+  const provided = req.headers.get('x-webhook-secret') ?? ''
   if (!WEBHOOK_SECRET || provided !== WEBHOOK_SECRET) {
     return new Response('Unauthorized', { status: 401 })
   }

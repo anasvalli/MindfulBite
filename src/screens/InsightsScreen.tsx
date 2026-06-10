@@ -251,9 +251,13 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
         .filter((d) => d.sleepMinutes !== null)
         .map((d) => ({ date: d.date, durationMinutes: d.sleepMinutes!, quality: d.sleepQuality ?? 3 }))
 
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/insights', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token ?? ''}`,
+        },
         body: JSON.stringify({
           meals: mealsPayload,
           moods: moodsPayload,

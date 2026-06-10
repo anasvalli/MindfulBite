@@ -227,7 +227,7 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
     setPreviewUrl(dataUrl)
     setBase64(dataUrl)
     setStep('analyzing')
-    analyzeFoodImage(dataUrl, { cuisine: profile?.cuisine_pref, dietary: profile?.dietary_prefs, userId: user?.id })
+    analyzeFoodImage(dataUrl, { cuisine: profile?.cuisine_pref, dietary: profile?.dietary_prefs })
       .then((detected) => {
         setItems(detected)
         setStep('result')
@@ -403,7 +403,7 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
       setBase64(dataUrl)
       setStep('analyzing')
       try {
-        const detected = await analyzeFoodImage(dataUrl, { cuisine: profile?.cuisine_pref, dietary: profile?.dietary_prefs, userId: user?.id })
+        const detected = await analyzeFoodImage(dataUrl, { cuisine: profile?.cuisine_pref, dietary: profile?.dietary_prefs })
         setItems(detected)
         setStep('result')
       } catch {
