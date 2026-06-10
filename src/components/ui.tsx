@@ -47,7 +47,7 @@ export function CountUp({ value, duration = 900, decimals = 0, className, style 
       : Math.round(display).toLocaleString()
 
   return (
-    <span className={className} style={style}>
+    <span className={className} style={{ fontVariantNumeric: 'tabular-nums', ...style }}>
       {formatted}
     </span>
   )
@@ -308,7 +308,7 @@ export const glassBtn: React.CSSProperties = {
   backdropFilter: 'blur(12px)',
   WebkitBackdropFilter: 'blur(12px)',
   border: '1px solid rgba(255,255,255,0.2)',
-  borderRadius: 16,
+  borderRadius: 14,
   color: '#fff',
   padding: '10px 20px',
   cursor: 'pointer',
@@ -392,7 +392,7 @@ export function Toaster() {
             maxWidth: '86%',
             background: 'var(--surface)',
             border: `1px solid ${t.type === 'error' ? 'oklch(0.62 0.16 25 / 0.5)' : 'var(--line)'}`,
-            borderRadius: 16,
+            borderRadius: 14,
             boxShadow: '0 8px 28px rgba(0,0,0,0.22)',
             padding: '11px 16px',
             pointerEvents: 'auto',

@@ -113,7 +113,7 @@ export function InstallPrompt() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: 8,
+          borderRadius: 10,
           border: '1px solid var(--line)',
           background: 'transparent',
           color: 'var(--text)',

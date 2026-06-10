@@ -268,7 +268,7 @@ export function WeeklyRecap({ userId, onClose }: { userId: string; onClose: () =
           maxWidth: 380,
           maxHeight: '92vh',
           overflowY: 'auto',
-          borderRadius: 28,
+          borderRadius: 22,
           padding: 28,
           border: '1px solid var(--accent-line)',
           background:
@@ -364,7 +364,7 @@ export function WeeklyRecap({ userId, onClose }: { userId: string; onClose: () =
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr',
-                gap: 14,
+                gap: 16,
                 position: 'relative',
               }}
             >
@@ -386,7 +386,7 @@ export function WeeklyRecap({ userId, onClose }: { userId: string; onClose: () =
                   alignItems: 'center',
                   gap: 12,
                   padding: '12px 14px',
-                  borderRadius: 16,
+                  borderRadius: 14,
                   background: 'var(--surface-2)',
                   border: '1px solid var(--line)',
                   position: 'relative',
@@ -444,7 +444,7 @@ export function WeeklyRecap({ userId, onClose }: { userId: string; onClose: () =
                 style={{
                   flex: 1,
                   padding: '13px 16px',
-                  borderRadius: 16,
+                  borderRadius: 14,
                   border: 'none',
                   background: 'var(--accent)',
                   color: 'var(--on-accent)',
@@ -465,7 +465,7 @@ export function WeeklyRecap({ userId, onClose }: { userId: string; onClose: () =
                 onClick={onClose}
                 style={{
                   padding: '13px 20px',
-                  borderRadius: 16,
+                  borderRadius: 14,
                   border: '1px solid var(--line)',
                   background: 'var(--surface-2)',
                   color: 'var(--text-muted)',
@@ -494,7 +494,7 @@ function Stat({ label, value, unit }: { label: string; value: string; unit?: str
         flexDirection: 'column',
         gap: 2,
         padding: '14px 16px',
-        borderRadius: 18,
+        borderRadius: 14,
         background: 'rgba(255,255,255,0.04)',
         border: '1px solid var(--line)',
       }}

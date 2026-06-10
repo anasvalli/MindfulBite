@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { IconCamera, IconMoon, IconEye, IconEyeOff } from '../components/icons'
 
 interface AuthScreenProps {
   go: (screen: string) => void
@@ -47,22 +48,23 @@ function PasswordInput({ value, onChange, placeholder, show, onToggle, name }: P
       />
       <button
         type="button"
+        aria-label={show ? 'Hide password' : 'Show password'}
         onClick={onToggle}
         style={{
           position: 'absolute',
-          right: 12,
+          right: 8,
           top: '50%',
           transform: 'translateY(-50%)',
           background: 'none',
           border: 'none',
           color: 'var(--text-dim)',
           cursor: 'pointer',
-          fontSize: 16,
-          padding: 4,
+          padding: 10,
           lineHeight: 1,
+          display: 'flex',
         }}
       >
-        {show ? '🙈' : '👁'}
+        {show ? <IconEyeOff size={18} /> : <IconEye size={18} />}
       </button>
     </div>
   )
@@ -252,12 +254,12 @@ export function AuthScreen({ go }: AuthScreenProps) {
           {/* Value strip — show what the product does before asking for credentials */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
             {[
-              ['📸', 'Snap meals → instant calories & macros'],
-              ['🌿', 'Sage — your AI nutritionist & coach'],
-              ['😴', 'Sleep & mood patterns, decoded'],
-            ].map(([icon, line]) => (
+              { icon: <IconCamera size={16} />, line: 'Snap meals → instant calories & macros' },
+              { icon: <span style={{ fontSize: 14, lineHeight: 1 }}>🌿</span>, line: 'Sage — your AI nutritionist & coach' },
+              { icon: <IconMoon size={16} />, line: 'Sleep & mood patterns, decoded' },
+            ].map(({ icon, line }) => (
               <div key={line} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
+                <span style={{ width: 22, display: 'flex', justifyContent: 'center', color: 'var(--accent)', flexShrink: 0 }}>{icon}</span>
                 <span style={{ fontFamily: 'var(--sans)', fontSize: 13, color: 'var(--text-muted)' }}>{line}</span>
               </div>
             ))}
@@ -308,7 +310,7 @@ export function AuthScreen({ go }: AuthScreenProps) {
             {/* Form */}
             <form
               onSubmit={handleSubmit}
-              style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}
+              style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}
             >
               {/* Email */}
               <div>
@@ -427,7 +429,7 @@ export function AuthScreen({ go }: AuthScreenProps) {
                   background: loading ? 'var(--accent-wash)' : 'var(--accent)',
                   color: loading ? 'var(--text-dim)' : 'var(--on-accent)',
                   border: 'none',
-                  borderRadius: 18,
+                  borderRadius: 14,
                   fontFamily: 'var(--sans)',
                   fontSize: 15,
                   fontWeight: 700,

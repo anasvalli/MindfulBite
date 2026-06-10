@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import type { Meal } from '../types'
-import { Ring, Card, Eyebrow, MacroBar, Spinner, IconButton } from '../components/ui'
-import { IconChevL, IconClose } from '../components/icons'
+import { Card, Eyebrow, MacroBar, Spinner, IconButton } from '../components/ui'
+import { IconChevL, IconClose, IconCamera } from '../components/icons'
 import { macroTargets } from '../lib/targets'
 import { aggregateDays, type DayAgg } from '../lib/aggregate'
 
@@ -135,9 +135,10 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
       <Card style={{ textAlign: 'center', padding: '28px 18px' }}>
         <Eyebrow style={{ marginBottom: 8, display: 'block' }}>Today's Calories</Eyebrow>
         <div
+          className="mb-num"
           style={{
             fontFamily: 'var(--serif)',
-            fontSize: 76,
+            fontSize: 60,
             fontWeight: 500,
             letterSpacing: '-0.02em',
             color: 'var(--text)',
@@ -154,7 +155,7 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
           <div
             style={{
               height: 6,
-              borderRadius: 6,
+              borderRadius: 4,
               background: 'var(--surface-2)',
               overflow: 'hidden',
             }}
@@ -164,7 +165,7 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
                 height: '100%',
                 width: `${Math.min(1, eaten / goal) * 100}%`,
                 background: 'var(--accent)',
-                borderRadius: 6,
+                borderRadius: 4,
                 transition: 'width 0.6s ease',
               }}
             />
@@ -175,24 +176,6 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
       {/* Macro Donuts */}
       <Card>
         <Eyebrow style={{ display: 'block', marginBottom: 14 }}>Macronutrients</Eyebrow>
-        <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: 20 }}>
-          {[
-            { label: 'Protein', val: totalProtein, goal: targets.protein, color: 'oklch(0.75 0.12 180)' },
-            { label: 'Carbs', val: totalCarbs, goal: targets.carbs, color: 'oklch(0.72 0.14 85)' },
-            { label: 'Fat', val: totalFat, goal: targets.fat, color: 'oklch(0.70 0.12 55)' },
-          ].map(({ label, val, goal: g, color }) => (
-            <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-              <Ring size={70} stroke={6} progress={g > 0 ? val / g : 0} color={color}>
-                <span style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, color }}>
-                  {Math.round(val)}
-                </span>
-              </Ring>
-              <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--mono)', letterSpacing: '0.08em' }}>
-                {label.toUpperCase()}
-              </span>
-            </div>
-          ))}
-        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <MacroBar label="Protein" value={totalProtein} goal={targets.protein} color="oklch(0.75 0.12 180)" />
           <MacroBar label="Carbs" value={totalCarbs} goal={targets.carbs} color="oklch(0.72 0.14 85)" />
@@ -502,7 +485,7 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
           background: 'var(--accent)',
           color: 'var(--on-accent)',
           border: 'none',
-          borderRadius: 18,
+          borderRadius: 14,
           fontFamily: 'var(--sans)',
           fontSize: 15,
           fontWeight: 700,
@@ -513,7 +496,7 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
           gap: 8,
         }}
       >
-        📷 {todayMeals.length === 0 ? 'Snap Your First Meal' : 'Snap Your Next Meal'}
+        <IconCamera size={18} /> {todayMeals.length === 0 ? 'Snap Your First Meal' : 'Snap Your Next Meal'}
       </button>
     </div>
   )

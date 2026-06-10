@@ -155,7 +155,7 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
             background: generating ? 'var(--accent-wash)' : 'var(--accent)',
             color: generating ? 'var(--accent)' : 'var(--on-accent)',
             border: generating ? '1px solid var(--accent-line)' : 'none',
-            borderRadius: 18,
+            borderRadius: 14,
             fontFamily: 'var(--sans)',
             fontSize: 15,
             fontWeight: 700,
@@ -243,7 +243,7 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
                 background: 'var(--accent)',
                 color: 'var(--on-accent)',
                 border: 'none',
-                borderRadius: 12,
+                borderRadius: 10,
                 padding: '10px 20px',
                 fontFamily: 'var(--sans)',
                 fontSize: 13,
@@ -281,12 +281,12 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[0, 1, 2, 3].map((i) => (
               <Card key={i} pad={16} style={{ opacity: 0.5 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <div
                     style={{
                       width: 52,
                       height: 52,
-                      borderRadius: 16,
+                      borderRadius: 14,
                       background: 'var(--surface-2)',
                       flexShrink: 0,
                     }}
@@ -296,7 +296,7 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
                       style={{
                         height: 10,
                         background: 'var(--surface-2)',
-                        borderRadius: 6,
+                        borderRadius: 4,
                         marginBottom: 8,
                         width: '40%',
                       }}
@@ -305,7 +305,7 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
                       style={{
                         height: 14,
                         background: 'var(--surface-2)',
-                        borderRadius: 6,
+                        borderRadius: 4,
                         width: '70%',
                       }}
                     />
@@ -320,13 +320,13 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
         {plan && !generating && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {plan.map((item, idx) => (
-              <Card key={idx} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Card key={idx} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 {/* Emoji tile */}
                 <div
                   style={{
                     width: 52,
                     height: 52,
-                    borderRadius: 16,
+                    borderRadius: 14,
                     background: 'var(--surface-2)',
                     display: 'grid',
                     placeItems: 'center',
@@ -359,7 +359,7 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
                   </div>
                   <div
                     style={{
-                      fontSize: 14.5,
+                      fontSize: 14,
                       color: 'var(--text)',
                       whiteSpace: expandedIdx === idx ? 'normal' : 'nowrap',
                       overflow: 'hidden',
@@ -375,7 +375,7 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
                     </div>
                   )}
                   {expandedIdx !== idx && (
-                    <div style={{ fontSize: 10.5, color: 'var(--accent)', marginTop: 4 }}>Tap for details</div>
+                    <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4 }}>Tap for details</div>
                   )}
                 </div>
 
@@ -450,7 +450,7 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
             fontFamily: 'var(--sans)',
             fontSize: 14,
             fontWeight: 600,
-            borderRadius: 100,
+            borderRadius: 999,
             padding: '10px 20px',
             whiteSpace: 'nowrap',
             boxShadow: '0 4px 16px rgba(0,0,0,0.3)',

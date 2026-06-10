@@ -161,7 +161,7 @@ function TabBar({ screen, go }: TabBarProps) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: 'var(--on-accent)',
-                  boxShadow: '0 4px 16px oklch(0.80 0.09 85 / 0.40)',
+                  boxShadow: '0 4px 14px oklch(0.80 0.09 85 / 0.24)',
                   transform: 'translateY(-10px)',
                   transition: 'transform 0.15s ease',
                 }}
@@ -400,6 +400,7 @@ export default function App() {
             {/* Screen content */}
             <div
               key={screenKey}
+              className="mb-screen-enter"
               style={{
                 width: '100%',
                 height: '100%',

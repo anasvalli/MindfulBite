@@ -84,7 +84,7 @@ export function WearablesScreen({ go }: WearablesScreenProps) {
   }
 
   return (
-    <div className="mb-screen" style={{ padding: '56px 20px 40px', display: 'flex', flexDirection: 'column', gap: 18, overflow: 'auto', height: '100%' }}>
+    <div className="mb-screen" style={{ padding: '56px 20px 40px', display: 'flex', flexDirection: 'column', gap: 16, overflow: 'auto', height: '100%' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={() => go('settings')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
@@ -95,7 +95,7 @@ export function WearablesScreen({ go }: WearablesScreenProps) {
         </div>
       </div>
 
-      <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: -8 }}>
+      <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: -8 }}>
         Sync sleep, calories burned, steps, and heart rate automatically from your wearable. Pick whichever device you own.
       </p>
 
@@ -103,7 +103,7 @@ export function WearablesScreen({ go }: WearablesScreenProps) {
       {latest && (
         <Card style={{ background: 'var(--accent-wash)', border: '1px solid var(--accent-line)' }}>
           <Eyebrow style={{ display: 'block', marginBottom: 10 }}>Last synced · {latest.date}</Eyebrow>
-          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {latest.calories_burned != null && <Metric label="Burned" value={`${Math.round(latest.calories_burned)} kcal`} />}
             {latest.steps != null && <Metric label="Steps" value={`${latest.steps}`} />}
             {latest.sleep_minutes != null && <Metric label="Sleep" value={`${Math.floor(latest.sleep_minutes / 60)}h ${latest.sleep_minutes % 60}m`} />}
@@ -119,7 +119,7 @@ export function WearablesScreen({ go }: WearablesScreenProps) {
           <div style={{ fontSize: 14, fontFamily: 'var(--serif)', color: 'var(--text)', marginBottom: 6 }}>
             Wearable sync is being set up
           </div>
-          <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
             Device connections will be available here shortly. You can still log sleep and mood manually in the meantime.
           </p>
         </Card>
@@ -137,7 +137,7 @@ export function WearablesScreen({ go }: WearablesScreenProps) {
                 style={{
                   background: 'var(--surface)',
                   border: '1px solid var(--line)',
-                  borderRadius: 16,
+                  borderRadius: 14,
                   padding: '14px 16px',
                   display: 'flex',
                   alignItems: 'center',
@@ -146,13 +146,13 @@ export function WearablesScreen({ go }: WearablesScreenProps) {
               >
                 <span style={{ fontSize: 22 }}>{p.emoji}</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14.5, color: 'var(--text)', fontWeight: 500 }}>{p.label}</div>
+                  <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>{p.label}</div>
                   {!p.web && (
                     <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>Requires the mobile app</div>
                   )}
                 </div>
                 {connected ? (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
                     <IconCheck size={14} /> Connected
                   </span>
                 ) : p.web ? (
@@ -165,7 +165,7 @@ export function WearablesScreen({ go }: WearablesScreenProps) {
                       border: 'none',
                       borderRadius: 10,
                       padding: '7px 14px',
-                      fontSize: 12.5,
+                      fontSize: 13,
                       fontWeight: 600,
                       fontFamily: 'var(--sans)',
                       cursor: configured ? 'pointer' : 'not-allowed',
@@ -174,7 +174,7 @@ export function WearablesScreen({ go }: WearablesScreenProps) {
                     Connect
                   </button>
                 ) : (
-                  <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>App only</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>App only</span>
                 )}
               </div>
             )
@@ -189,7 +189,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 500, color: 'var(--text)' }}>{value}</div>
-      <div style={{ fontSize: 10.5, color: 'var(--text-dim)', fontFamily: 'var(--mono)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--mono)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</div>
     </div>
   )
 }

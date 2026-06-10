@@ -192,7 +192,7 @@ export function CycleScreen({ go }: CycleScreenProps) {
         padding: '56px 20px 40px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 18,
+        gap: 16,
       }}
     >
       {/* Header */}
@@ -270,13 +270,13 @@ export function CycleScreen({ go }: CycleScreenProps) {
                       aspectRatio: '1',
                       background: 'none',
                       border: isToday ? '1px solid var(--accent-line)' : '1px solid transparent',
-                      borderRadius: 12,
+                      borderRadius: 10,
                       cursor: 'pointer',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 3,
+                      gap: 4,
                       padding: 0,
                     }}
                   >
@@ -373,7 +373,7 @@ export function CycleScreen({ go }: CycleScreenProps) {
                           color: active ? 'var(--on-accent)' : 'var(--text-muted)',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 5,
+                          gap: 6,
                         }}
                       >
                         {active && <IconCheck size={12} />}

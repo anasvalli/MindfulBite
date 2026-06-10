@@ -33,7 +33,9 @@ function hueFor(accent: AccentKey): number {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>(() => {
-    return (localStorage.getItem('themeMode') as ThemeMode) || 'dark'
+    // Default to the device preference — forcing dark on light-mode users
+    // makes the app feel like it ignores their settings.
+    return (localStorage.getItem('themeMode') as ThemeMode) || 'system'
   })
   const [accent, setAccentState] = useState<AccentKey>(() => {
     return (localStorage.getItem('accentColor') as AccentKey) || 'gold'

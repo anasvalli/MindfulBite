@@ -877,7 +877,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                     background: 'rgba(0,0,0,0.35)',
                     backdropFilter: 'blur(8px)',
                     border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: 100,
+                    borderRadius: 999,
                     padding: '8px 20px',
                   }}
                 >
@@ -925,7 +925,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 18,
+              gap: 16,
               background: 'linear-gradient(to bottom, transparent, var(--bg))',
             }}
           >
@@ -936,7 +936,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                 gap: 8,
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: 100,
+                borderRadius: 999,
                 padding: '4px 4px',
               }}
             >
@@ -966,7 +966,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                     }}
                     style={{
                       padding: '7px 18px',
-                      borderRadius: 100,
+                      borderRadius: 999,
                       border: 'none',
                       background: active ? 'var(--accent)' : 'transparent',
                       color: active ? 'var(--on-accent)' : 'rgba(255,255,255,0.55)',
@@ -993,7 +993,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                   background: 'var(--accent)',
                   color: 'var(--on-accent)',
                   border: 'none',
-                  borderRadius: 28,
+                  borderRadius: 999,
                   fontFamily: 'var(--sans)',
                   fontSize: 14,
                   fontWeight: 700,
@@ -1024,7 +1024,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                   style={{
                     width: 46,
                     height: 46,
-                    borderRadius: 12,
+                    borderRadius: 10,
                     background: 'rgba(255,255,255,0.08)',
                     border: '1px solid rgba(255,255,255,0.2)',
                     color: '#fff',
@@ -1163,7 +1163,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
               padding: '20px 20px 0',
               display: 'flex',
               alignItems: 'flex-start',
-              gap: 14,
+              gap: 16,
               flexShrink: 0,
             }}
           >
@@ -1245,7 +1245,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
 
             {/* Recent + Frequent — instant, from the user's own history */}
             {(frequentFoods.length > 0 || recentFoods.length > 0) && searchResults.length === 0 && (
-              <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {frequentFoods.length > 0 && (
                   <div>
                     <Eyebrow style={{ display: 'block', marginBottom: 8 }}>Frequent</Eyebrow>
@@ -1480,7 +1480,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                       onClick={() => toggleSelect(item.id)}
                       style={{
                         background: selected ? 'var(--accent-wash)' : 'var(--surface)',
-                        borderRadius: 16,
+                        borderRadius: 14,
                         border: selected ? '1px solid var(--accent-line)' : '1px solid var(--line)',
                         padding: '12px 14px',
                         display: 'flex',
@@ -1565,7 +1565,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                   background: selectedIds.size > 0 ? 'var(--accent)' : 'var(--surface-2)',
                   color: selectedIds.size > 0 ? 'var(--on-accent)' : 'var(--text-dim)',
                   border: 'none',
-                  borderRadius: 18,
+                  borderRadius: 14,
                   fontFamily: 'var(--sans)',
                   fontSize: 15,
                   fontWeight: 700,
@@ -1988,7 +1988,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                           background: 'var(--accent)',
                           color: 'var(--on-accent)',
                           border: 'none',
-                          borderRadius: 12,
+                          borderRadius: 10,
                           fontFamily: 'var(--sans)',
                           fontSize: 14,
                           fontWeight: 700,
@@ -2015,12 +2015,12 @@ Accurate nutritional estimates for typical local portion sizes.`,
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>{item.name}</span>
                           {item.source === 'usda' && (
-                            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', color: 'oklch(0.74 0.14 150)', background: 'oklch(0.74 0.14 150 / 0.14)', borderRadius: 6, padding: '2px 6px' }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'oklch(0.74 0.14 150)', background: 'oklch(0.74 0.14 150 / 0.14)', borderRadius: 4, padding: '2px 6px' }}>
                               ✓ VERIFIED
                             </span>
                           )}
                           {typeof item.confidence === 'number' && item.confidence < 0.7 && (
-                            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--warn, oklch(0.78 0.12 70))', background: 'oklch(0.78 0.12 70 / 0.14)', borderRadius: 6, padding: '2px 6px' }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--warn, oklch(0.78 0.12 70))', background: 'oklch(0.78 0.12 70 / 0.14)', borderRadius: 4, padding: '2px 6px' }}>
                               {Math.round(item.confidence * 100)}%
                             </span>
                           )}
@@ -2045,7 +2045,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                           <button
                             key={alt}
                             onClick={() => switchAlternative(item, alt)}
-                            style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 999, border: '1px solid var(--line)', background: 'var(--surface-2)', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--sans)' }}
+                            style={{ fontSize: 12, padding: '4px 10px', borderRadius: 999, border: '1px solid var(--line)', background: 'var(--surface-2)', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--sans)' }}
                           >
                             {alt}
                           </button>
@@ -2063,7 +2063,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                             key={f}
                             onClick={() => setPortion(item, f)}
                             style={{
-                              fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 8,
+                              fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 10,
                               border: active ? '1px solid var(--accent-line)' : '1px solid var(--line)',
                               background: active ? 'var(--accent-wash)' : 'transparent',
                               color: active ? 'var(--accent)' : 'var(--text-muted)',
@@ -2086,7 +2086,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                 style={{
                   background: 'var(--accent-wash)',
                   border: '1px solid var(--accent-line)',
-                  borderRadius: 16,
+                  borderRadius: 14,
                   padding: '14px 16px',
                   marginBottom: 20,
                 }}
@@ -2160,7 +2160,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                 height: 52,
                 background: 'var(--surface)',
                 border: '1px solid var(--line)',
-                borderRadius: 18,
+                borderRadius: 14,
                 color: 'var(--text-muted)',
                 fontFamily: 'var(--sans)',
                 fontSize: 14,
@@ -2184,7 +2184,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                 background: saving ? 'var(--accent-wash)' : 'var(--accent)',
                 color: saving ? 'var(--text-dim)' : 'var(--on-accent)',
                 border: 'none',
-                borderRadius: 18,
+                borderRadius: 14,
                 fontFamily: 'var(--sans)',
                 fontSize: 15,
                 fontWeight: 700,
@@ -2257,7 +2257,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                   <span style={{ color: 'var(--accent)' }}> — {Math.round(remaining).toLocaleString()} left</span>
                 </div>
                 {delta != null && (
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-dim)', marginTop: 4 }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
                     {delta === 0 ? 'level with yesterday' : `${Math.abs(delta).toLocaleString()} kcal ${delta < 0 ? 'behind' : 'ahead of'} yesterday so far`}
                   </div>
                 )}
@@ -2299,7 +2299,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                       style={{
                         background: on ? `oklch(0.78 0.09 ${m.hue} / 0.15)` : 'var(--surface)',
                         border: on ? `1.5px solid oklch(0.78 0.09 ${m.hue})` : '1px solid var(--line)',
-                        borderRadius: 18,
+                        borderRadius: 14,
                         padding: '16px 12px',
                         cursor: 'pointer',
                         display: 'flex',
@@ -2348,7 +2348,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                   style={{
                     width: 16,
                     height: 16,
-                    borderRadius: 5,
+                    borderRadius: 4,
                     border: '1.5px solid var(--line)',
                     background: skipMoodAsk ? 'var(--accent)' : 'transparent',
                     display: 'inline-flex',
@@ -2384,7 +2384,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
           )}
 
           {/* Done — logging is already complete; mood was the optional extra */}
-          <div style={{ padding: '20px 20px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+          <div style={{ padding: '20px 20px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
             <button
               onClick={() => handleFinishLogging(null)}
               disabled={savingMood}
@@ -2394,7 +2394,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                 background: savingMood ? 'var(--surface-2)' : 'var(--accent)',
                 color: savingMood ? 'var(--text-dim)' : 'var(--on-accent)',
                 border: 'none',
-                borderRadius: 28,
+                borderRadius: 999,
                 fontFamily: 'var(--sans)',
                 fontSize: 15,
                 fontWeight: 700,

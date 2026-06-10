@@ -32,7 +32,7 @@ export function StreakBadge({ current }: { current: number }) {
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 5,
+        gap: 6,
         padding: '4px 11px',
         borderRadius: 999,
         background: 'var(--accent-wash)',

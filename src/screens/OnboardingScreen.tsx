@@ -132,7 +132,7 @@ function Chip({
       onClick={onClick}
       style={{
         padding: small ? '5px 10px' : '8px 14px',
-        borderRadius: 24,
+        borderRadius: 22,
         border: selected ? '1px solid var(--accent-line)' : '1px solid var(--line)',
         background: selected ? 'var(--accent-wash)' : 'var(--surface-2)',
         color: selected ? 'var(--accent)' : 'var(--text-muted)',
@@ -165,7 +165,7 @@ function SegmentedControl<T extends string>({
       style={{
         display: 'flex',
         background: 'var(--surface-2)',
-        borderRadius: 12,
+        borderRadius: 10,
         padding: 3,
         border: '1px solid var(--line)',
         width: 'fit-content',
@@ -241,7 +241,7 @@ function ContinueButton({
         background: disabled ? 'var(--accent-wash)' : 'var(--accent)',
         color: disabled ? 'var(--text-dim)' : 'var(--on-accent)',
         border: 'none',
-        borderRadius: 18,
+        borderRadius: 14,
         fontFamily: 'var(--sans)',
         fontSize: 15,
         fontWeight: 700,
@@ -426,7 +426,7 @@ function Step1({
                   alignItems: 'flex-start',
                   gap: 4,
                   padding: '14px 14px',
-                  borderRadius: 16,
+                  borderRadius: 14,
                   border: selected
                     ? '1px solid var(--accent-line)'
                     : '1px solid var(--line)',
@@ -578,7 +578,7 @@ function Step1({
                 justifyContent: 'center',
                 gap: 6,
                 padding: '11px 8px',
-                borderRadius: 16,
+                borderRadius: 14,
                 border:
                   formGender === key
                     ? '1px solid var(--accent-line)'
@@ -814,7 +814,7 @@ function Step2({
             <p style={{ fontFamily: 'var(--sans)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
               BMI: <span style={{ fontWeight: 600, color: 'var(--text)' }}>{calculatedBmi}</span>
             </p>
-            <div style={{ position: 'relative', height: 5, borderRadius: 5, overflow: 'visible', background: 'linear-gradient(to right, oklch(0.74 0.08 230), oklch(0.75 0.10 150) 30%, oklch(0.76 0.11 85) 62%, oklch(0.68 0.13 30))' }}>
+            <div style={{ position: 'relative', height: 5, borderRadius: 4, overflow: 'visible', background: 'linear-gradient(to right, oklch(0.74 0.08 230), oklch(0.75 0.10 150) 30%, oklch(0.76 0.11 85) 62%, oklch(0.68 0.13 30))' }}>
               <div
                 style={{
                   position: 'absolute',
@@ -889,7 +889,7 @@ function Step2({
                   alignItems: 'center',
                   gap: 12,
                   padding: '13px 16px',
-                  borderRadius: 16,
+                  borderRadius: 14,
                   border: selected
                     ? '1px solid var(--accent-line)'
                     : '1px solid var(--line)',
@@ -1304,7 +1304,7 @@ function Step4({
 
         {/* Goal-pace framing instead of a clinical category on the celebration screen */}
         {weightKg > 0 && goalWeightKg > 0 && Math.abs(weightKg - goalWeightKg) >= 0.5 && (
-          <p style={{ fontFamily: 'var(--sans)', fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
             {weightKg > goalWeightKg
               ? `Your plan targets ${(weightKg - goalWeightKg).toFixed(1)} kg over ~${Math.max(1, Math.round((weightKg - goalWeightKg) / 0.5))} weeks — a sustainable pace.`
               : `Your plan targets ${(goalWeightKg - weightKg).toFixed(1)} kg of healthy gain at a steady pace.`}
@@ -1468,7 +1468,7 @@ function Step4({
           background: saving ? 'var(--accent-wash)' : 'var(--accent)',
           color: saving ? 'var(--text-dim)' : 'var(--on-accent)',
           border: 'none',
-          borderRadius: 18,
+          borderRadius: 14,
           fontFamily: 'var(--sans)',
           fontSize: 15,
           fontWeight: 700,

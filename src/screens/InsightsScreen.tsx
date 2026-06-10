@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { Ring, Card, Eyebrow, Spinner, IconButton, toast } from '../components/ui'
-import { IconChevL, IconTrend } from '../components/icons'
+import { IconChevL, IconTrend, IconSearch } from '../components/icons'
 import { MOOD_HUES, MOOD_EMOJIS } from '../lib/moods'
 import { macroTargets } from '../lib/targets'
 import { aggregateDays } from '../lib/aggregate'
@@ -289,8 +289,11 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
   }, [loading])
 
   // ── Derived values ──
-  const avgCalories = days.length > 0
-    ? Math.round(days.reduce((s, d) => s + d.calories, 0) / days.length)
+  // Average over LOGGED days only — matches the balance line below it
+  // (a 7-day mean including empty days contradicted it in the same card).
+  const loggedForAvg = days.filter((d) => d.calories > 0)
+  const avgCalories = loggedForAvg.length > 0
+    ? Math.round(loggedForAvg.reduce((s, d) => s + d.calories, 0) / loggedForAvg.length)
     : 0
 
   const avgProtein = days.length > 0
@@ -353,7 +356,7 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
           flex: 1,
           background: 'var(--surface)',
           border: '1px solid var(--line)',
-          borderRadius: 18,
+          borderRadius: 14,
           padding: '14px 8px 12px',
           display: 'flex',
           flexDirection: 'column',
@@ -457,13 +460,13 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
                   {recs.map((r: { title: string; body: string; priority: string }, i: number) => (
                     <div key={i} style={{
                       background: 'var(--surface)', border: '1px solid var(--line)',
-                      borderRadius: 16, padding: '14px 16px',
+                      borderRadius: 14, padding: '14px 16px',
                       borderLeft: `3px solid ${r.priority === 'high' ? 'var(--accent)' : r.priority === 'medium' ? COLOR_MOOD : 'var(--surface-2)'}`,
                     }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
                         {r.title}
                       </div>
-                      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                      <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
                         {r.body}
                       </div>
                     </div>
@@ -475,11 +478,11 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
         </div>
       ) : (
         <Card style={{ textAlign: 'center', padding: '22px 20px' }}>
-          <p style={{ fontSize: 28, marginBottom: 10 }}>🔍</p>
+          <p style={{ marginBottom: 10, color: 'var(--text-dim)', display: 'flex', justifyContent: 'center' }}><IconSearch size={28} /></p>
           <p style={{ fontSize: 14, fontFamily: 'var(--serif)', color: 'var(--text)', marginBottom: 6 }}>
             Your Weekly Report
           </p>
-          <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.55, marginBottom: 16 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.55, marginBottom: 16 }}>
             Sage will analyse your food, mood, and sleep data to generate personalised clinical scores and recommendations.
           </p>
           {generateError && (
@@ -609,7 +612,7 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
           </Card>
         )
       })() : history.length === 1 ? (
-        <p style={{ fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.45, padding: '0 4px', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.45, padding: '0 4px', margin: 0 }}>
           Generate reports across multiple weeks to see your trend.
         </p>
       ) : null}
@@ -646,8 +649,8 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <Eyebrow>Calories vs Goal</Eyebrow>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)' }}>
-                  avg {avgCalories} kcal
+                <span className="mb-num" style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)' }}>
+                  avg {avgCalories} kcal · logged days
                 </span>
               </div>
               <p style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 14, lineHeight: 1.4 }}>
@@ -679,7 +682,7 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
                         style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, justifyContent: 'flex-end', height: '100%' }}
                       >
                         {day.calories > 0 && (
-                          <span style={{ fontFamily: 'var(--mono)', fontSize: 8.5, color: isToday ? 'var(--accent)' : 'var(--text-dim)' }}>
+                          <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: isToday ? 'var(--accent)' : 'var(--text-dim)' }}>
                             {Math.round(day.calories / 100) / 10}k
                           </span>
                         )}
@@ -763,7 +766,7 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
           style={{
             background: 'var(--accent-wash)',
             border: '1px solid var(--accent-line)',
-            borderRadius: 12,
+            borderRadius: 10,
             padding: '10px 14px',
             fontSize: 12,
             color: 'var(--text-muted)',
@@ -842,7 +845,7 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
                   style={{
                     width: 26,
                     height: 26,
-                    borderRadius: 8,
+                    borderRadius: 10,
                     background: hue !== null ? `oklch(0.72 0.10 ${hue} / 0.15)` : 'var(--surface-2)',
                     border: `1px solid ${hue !== null ? `oklch(0.72 0.10 ${hue} / 0.35)` : 'var(--line)'}`,
                     display: 'flex',
@@ -881,7 +884,7 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
       {/* ── Section 5: Weekly Macros — per-day bars so weekday/weekend variation shows ── */}
       <Card>
         <Eyebrow style={{ display: 'block', marginBottom: 16 }}>Weekly Macros</Eyebrow>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {[
             { label: 'Protein', key: 'protein' as const, goal: proteinGoal, avg: avgProtein, color: COLOR_PROTEIN },
             { label: 'Carbs', key: 'carbs' as const, goal: carbsGoal, avg: avgCarbs, color: 'oklch(0.72 0.14 85)' },

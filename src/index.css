@@ -228,12 +228,40 @@ input[type='range']::-moz-range-thumb {
   animation: mb-pop 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Utility: tactile press feedback for buttons */
+/* Tactile press feedback — global. Every interactive button compresses
+   slightly on touch (was opt-in via .mb-press and covered 12 of 111 buttons). */
+button {
+  transition: transform 0.12s ease;
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
 .mb-press {
   transition: transform 0.12s ease;
 }
 .mb-press:active {
   transform: scale(0.96);
+}
+
+/* Screen-level entrance: every screen mount fades + rises 4px (200ms) so
+   navigation doesn't pop. Applied to the screen container in App. */
+@keyframes mb-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.mb-screen-enter {
+  animation: mb-screen-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Changing numbers (CountUp, stats) keep a fixed width per digit — no jitter. */
+.mb-num {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Animation: toast slide-up */

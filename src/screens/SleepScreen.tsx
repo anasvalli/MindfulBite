@@ -367,7 +367,7 @@ export function SleepScreen({ go }: SleepScreenProps) {
             {/* ─── Hero Card ──────────────────────────────────────────────── */}
             {heroLog ? (
               <Card>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   {/* Ring */}
                   <Ring
                     size={130}
@@ -521,9 +521,9 @@ export function SleepScreen({ go }: SleepScreenProps) {
                     const heightPct = Math.min(day.minutes / maxBar, 1)
                     const barHeight = Math.max(day.minutes > 0 ? 6 : 2, heightPct * barH)
                     return (
-                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 3 }}>
+                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 4 }}>
                         {day.minutes > 0 && (
-                          <span style={{ fontFamily: 'var(--mono)', fontSize: 8.5, color: day.isToday ? SLEEP_COLOR : 'var(--text-dim)' }}>
+                          <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: day.isToday ? SLEEP_COLOR : 'var(--text-dim)' }}>
                             {(day.minutes / 60).toFixed(day.minutes % 60 === 0 ? 0 : 1)}h
                           </span>
                         )}
@@ -631,7 +631,7 @@ export function SleepScreen({ go }: SleepScreenProps) {
               padding: '24px 20px 36px',
               display: 'flex',
               flexDirection: 'column',
-              gap: 18,
+              gap: 16,
               maxHeight: '88%',
               overflowY: 'auto',
             }}
@@ -763,7 +763,7 @@ export function SleepScreen({ go }: SleepScreenProps) {
                         alignItems: 'center',
                         gap: 4,
                         padding: '8px 4px',
-                        borderRadius: 12,
+                        borderRadius: 10,
                         fontSize: 11,
                         cursor: 'pointer',
                         width: '100%',
@@ -827,7 +827,7 @@ export function SleepScreen({ go }: SleepScreenProps) {
                 background: saving ? 'var(--surface-2)' : 'var(--accent)',
                 color: saving ? 'var(--text-dim)' : 'var(--on-accent)',
                 border: 'none',
-                borderRadius: 16,
+                borderRadius: 14,
                 fontFamily: 'var(--sans)',
                 fontWeight: 700,
                 fontSize: 15,

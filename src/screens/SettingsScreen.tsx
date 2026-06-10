@@ -619,7 +619,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                   display: 'inline-flex',
                   alignItems: 'center',
                   background: isPremium ? 'var(--accent)' : 'var(--surface-2)',
-                  borderRadius: 100,
+                  borderRadius: 999,
                   padding: '3px 10px',
                   marginBottom: 6,
                 }}
@@ -669,7 +669,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                   cursor: editable ? 'pointer' : 'default',
                 }}
               >
-                <span style={{ fontSize: 14.5, color: 'var(--text)' }}>{label}</span>
+                <span style={{ fontSize: 14, color: 'var(--text)' }}>{label}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span
                     style={{
@@ -686,7 +686,8 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
             ))}
           </Card>
 
-          {/* Daily Schedule */}
+          {/* Schedule + wearable — one grouped card, same paradigm as the App
+              section below (standalone pill rows read as a different system) */}
           <Card pad={0} style={{ marginTop: 10 }}>
             <div
               onClick={() => go('mealSchedule')}
@@ -696,9 +697,10 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 justifyContent: 'space-between',
                 padding: '14px 18px',
                 cursor: 'pointer',
+                borderBottom: '1px solid var(--line)',
               }}
             >
-              <span style={{ fontSize: 14.5, color: 'var(--text)' }}>Daily Schedule</span>
+              <span style={{ fontSize: 14, color: 'var(--text)' }}>Daily Schedule</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span
                   style={{
@@ -714,10 +716,6 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 <span style={{ color: 'var(--text-dim)' }}><IconChevR size={14} /></span>
               </div>
             </div>
-          </Card>
-
-          {/* Connect Wearable */}
-          <Card pad={0} style={{ marginTop: 10 }}>
             <div
               onClick={() => go('wearables')}
               style={{
@@ -728,9 +726,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 cursor: 'pointer',
               }}
             >
-              <span style={{ fontSize: 14.5, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                ⌚ Connect Wearable
-              </span>
+              <span style={{ fontSize: 14, color: 'var(--text)' }}>Connect Wearable</span>
               <span style={{ color: 'var(--text-dim)' }}><IconChevR size={14} /></span>
             </div>
           </Card>
@@ -742,8 +738,8 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
           <Card pad={0}>
             {/* Theme */}
             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line)' }}>
-              <div style={{ fontSize: 14.5, color: 'var(--text)', marginBottom: 10 }}>{t('settings.theme')}</div>
-              <div style={{ display: 'flex', gap: 6, background: 'var(--surface-2)', borderRadius: 12, padding: 4 }}>
+              <div style={{ fontSize: 14, color: 'var(--text)', marginBottom: 10 }}>{t('settings.theme')}</div>
+              <div style={{ display: 'flex', gap: 6, background: 'var(--surface-2)', borderRadius: 10, padding: 4 }}>
                 {(['light', 'dark', 'system'] as const).map((m) => (
                   <button
                     key={m}
@@ -770,7 +766,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
 
             {/* Accent color */}
             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line)' }}>
-              <div style={{ fontSize: 14.5, color: 'var(--text)', marginBottom: 10 }}>Accent color</div>
+              <div style={{ fontSize: 14, color: 'var(--text)', marginBottom: 10 }}>Accent color</div>
               <div style={{ display: 'flex', gap: 12 }}>
                 {ACCENTS.map((a) => (
                   <button
@@ -804,7 +800,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 cursor: 'pointer',
               }}
             >
-              <span style={{ fontSize: 14.5, color: 'var(--text)' }}>{t('settings.language')}</span>
+              <span style={{ fontSize: 14, color: 'var(--text)' }}>{t('settings.language')}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>
                   {LANGUAGES.find((l) => l.code === lang)?.label ?? lang}
@@ -825,12 +821,12 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 cursor: 'pointer',
               }}
             >
-              <span style={{ fontSize: 14.5, color: 'var(--text)' }}>Notifications</span>
+              <span style={{ fontSize: 14, color: 'var(--text)' }}>Notifications</span>
               <div
                 style={{
                   width: 46,
                   height: 26,
-                  borderRadius: 100,
+                  borderRadius: 999,
                   background: notifEnabled ? 'var(--accent)' : 'var(--surface-2)',
                   border: '1px solid var(--line)',
                   position: 'relative',
@@ -875,12 +871,12 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                     opacity: disabled ? 0.5 : 1,
                   }}
                 >
-                  <span style={{ fontSize: 13.5, color: 'var(--text-muted)' }}>{label}</span>
+                  <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{label}</span>
                   <div
                     style={{
                       width: 46,
                       height: 26,
-                      borderRadius: 100,
+                      borderRadius: 999,
                       background: on && !disabled ? 'var(--accent)' : 'var(--surface-2)',
                       border: '1px solid var(--line)',
                       position: 'relative',
@@ -918,7 +914,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
               }}
             >
               <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
-                <span style={{ fontSize: 13.5, color: 'var(--text-muted)', display: 'block' }}>Morning brief</span>
+                <span style={{ fontSize: 14, color: 'var(--text-muted)', display: 'block' }}>Morning brief</span>
                 <span style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginTop: 2 }}>
                   A ~7 AM push with yesterday's recap — works even when the app is closed
                 </span>
@@ -927,7 +923,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 style={{
                   width: 46,
                   height: 26,
-                  borderRadius: 100,
+                  borderRadius: 999,
                   background: reminderPrefs.morningBrief ? 'var(--accent)' : 'var(--surface-2)',
                   border: '1px solid var(--line)',
                   position: 'relative',
@@ -960,7 +956,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 borderBottom: '1px solid var(--line)',
               }}
             >
-              <span style={{ fontSize: 14.5, color: 'var(--text)' }}>App Version</span>
+              <span style={{ fontSize: 14, color: 'var(--text)' }}>App Version</span>
               <span style={{ fontSize: 14, color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>1.0.0</span>
             </div>
 
@@ -976,7 +972,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
             >
               <span
                 style={{
-                  fontSize: 14.5,
+                  fontSize: 14,
                   color: signingOut ? 'var(--text-dim)' : 'var(--danger, #e05252)',
                   fontFamily: 'var(--sans)',
                   fontWeight: 500,
@@ -1003,7 +999,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 style={{
                   background: patternStatus === 'loading' ? 'var(--surface-2)' : 'var(--accent-wash)',
                   border: '1px solid var(--accent-line)',
-                  borderRadius: 12,
+                  borderRadius: 10,
                   padding: '13px 20px',
                   color: patternStatus === 'loading' ? 'var(--text-dim)' : 'var(--accent)',
                   fontFamily: 'var(--sans)',
@@ -1047,7 +1043,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
           >
             <span
               style={{
-                fontSize: 14.5,
+                fontSize: 14,
                 color: 'var(--danger, #e05252)',
                 fontFamily: 'var(--sans)',
                 fontWeight: 500,
@@ -1106,7 +1102,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
             >
               Delete your account?
             </div>
-            <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.55, marginBottom: 22 }}>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.55, marginBottom: 22 }}>
               This permanently deletes all your meals, moods, sleep logs, and profile data. This cannot be undone.
             </p>
 
@@ -1120,7 +1116,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                   background: 'var(--surface-2)',
                   color: 'var(--text)',
                   border: '1px solid var(--line)',
-                  borderRadius: 18,
+                  borderRadius: 14,
                   fontFamily: 'var(--sans)',
                   fontSize: 15,
                   fontWeight: 600,
@@ -1138,7 +1134,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                   background: 'var(--danger, #e05252)',
                   color: '#fff',
                   border: 'none',
-                  borderRadius: 18,
+                  borderRadius: 14,
                   fontFamily: 'var(--sans)',
                   fontSize: 15,
                   fontWeight: 700,
@@ -1159,14 +1155,17 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
         </div>
       )}
 
-      {/* Edit Sheet Overlay */}
+      {/* Edit Sheet Overlay — fixed to the viewport (was absolute inside the
+          scrollable list, which beached the sheet mid-page when scrolled) */}
       {editField && (
         <div
           style={{
-            position: 'absolute',
+            position: 'fixed',
             inset: 0,
             background: 'rgba(0,0,0,0.5)',
-            zIndex: 100,
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            zIndex: 1000,
             display: 'flex',
             alignItems: 'flex-end',
           }}
@@ -1227,7 +1226,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                       onClick={() => togglePref(pref)}
                       style={{
                         padding: '8px 14px',
-                        borderRadius: 24,
+                        borderRadius: 22,
                         border: selected ? '1px solid var(--accent-line)' : '1px solid var(--line)',
                         background: selected ? 'var(--accent-wash)' : 'var(--surface-2)',
                         color: selected ? 'var(--accent)' : 'var(--text-muted)',
@@ -1256,7 +1255,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                         onClick={() => setEditValue(c)}
                         style={{
                           padding: '8px 14px',
-                          borderRadius: 24,
+                          borderRadius: 22,
                           border: selected ? '1px solid var(--accent-line)' : '1px solid var(--line)',
                           background: selected ? 'var(--accent-wash)' : 'var(--surface-2)',
                           color: selected ? 'var(--accent)' : 'var(--text-muted)',
@@ -1296,11 +1295,11 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 14,
+                        gap: 16,
                         textAlign: 'left',
                         width: '100%',
                         padding: '14px 16px',
-                        borderRadius: 16,
+                        borderRadius: 14,
                         border: selected ? '1px solid var(--accent-line)' : '1px solid var(--line)',
                         background: selected ? 'var(--accent-wash)' : 'var(--surface-2)',
                         cursor: 'pointer',
@@ -1319,7 +1318,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                         >
                           {g.label}
                         </span>
-                        <span style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--sans)' }}>
+                        <span style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--sans)' }}>
                           {g.blurb}
                         </span>
                       </span>
@@ -1339,7 +1338,7 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 background: saveSuccess ? 'oklch(0.74 0.14 150)' : saving ? 'var(--accent-wash)' : 'var(--accent)',
                 color: saving ? 'var(--text-dim)' : 'var(--on-accent)',
                 border: 'none',
-                borderRadius: 18,
+                borderRadius: 14,
                 fontFamily: 'var(--sans)',
                 fontSize: 15,
                 fontWeight: 700,

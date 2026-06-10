@@ -208,7 +208,7 @@ export function WaterScreen({ go }: WaterScreenProps) {
         padding: '56px 20px 40px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 18,
+        gap: 16,
       }}
     >
       {/* Header */}
@@ -241,7 +241,7 @@ export function WaterScreen({ go }: WaterScreenProps) {
       ) : (
         <>
           {/* Ring */}
-          <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+          <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
             <Ring size={160} stroke={14} progress={progress} color={WATER_COLOR} track={WATER_TRACK}>
               <div style={{ textAlign: 'center' }}>
                 <div
@@ -287,7 +287,7 @@ export function WaterScreen({ go }: WaterScreenProps) {
                     flex: 1,
                     background: 'var(--surface)',
                     border: `1px solid ${WATER_COLOR}`,
-                    borderRadius: 18,
+                    borderRadius: 14,
                     padding: '14px 8px',
                     cursor: adding ? 'default' : 'pointer',
                     opacity: adding ? 0.6 : 1,
@@ -450,7 +450,7 @@ export function WaterScreen({ go }: WaterScreenProps) {
                           maxWidth: 28,
                           height: Math.max(4, (d.ml / weekMax) * 80),
                           background: d.isToday || selectedBar === i ? WATER_COLOR : WATER_TRACK,
-                          borderRadius: 5,
+                          borderRadius: 4,
                           transition: 'height 0.5s ease',
                         }}
                       />

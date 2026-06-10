@@ -375,7 +375,7 @@ export function HistoryScreen({ go }: HistoryScreenProps) {
                 width: '100%',
                 background: 'var(--surface)',
                 border: '1px solid var(--line)',
-                borderRadius: 16,
+                borderRadius: 14,
                 padding: '14px 20px',
                 color: loadingMore ? 'var(--text-dim)' : 'var(--text-muted)',
                 fontFamily: 'var(--sans)',

@@ -4,7 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import type { Meal, MealMood } from '../types'
 import { Ring, Card, Eyebrow, MacroBar, CountUp, Skeleton, SkeletonCard, toast, haptic } from '../components/ui'
-import { IconFlame, IconMoon, IconMood, IconChevR, IconTrend, IconGear } from '../components/icons'
+import { IconFlame, IconMoon, IconMood, IconChevR, IconTrend, IconGear, IconCalendar, IconScale, IconDrop } from '../components/icons'
 import { parseTime12h } from '../lib/time'
 import { computeStreak, type StreakResult } from '../lib/streaks'
 import { StreakBadge } from '../components/StreakBadge'
@@ -83,7 +83,7 @@ function StreakSheet({ streak, days, onClose }: { streak: StreakResult; days: Da
         style={{
           width: '100%',
           maxWidth: 360,
-          borderRadius: 28,
+          borderRadius: 22,
           padding: 26,
           border: '1px solid var(--accent-line)',
           background: 'linear-gradient(165deg, var(--accent-wash) 0%, var(--surface) 45%, var(--surface-2) 100%)',
@@ -108,7 +108,7 @@ function StreakSheet({ streak, days, onClose }: { streak: StreakResult; days: Da
           <Eyebrow style={{ display: 'block', marginBottom: 10, textAlign: 'center' }}>This week</Eyebrow>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
             {week.map((d) => (
-              <div key={d.date} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+              <div key={d.date} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <div
                   style={{
                     width: 26,
@@ -151,7 +151,7 @@ function StreakSheet({ streak, days, onClose }: { streak: StreakResult; days: Da
           onClick={onClose}
           style={{
             padding: '13px 20px',
-            borderRadius: 16,
+            borderRadius: 14,
             border: 'none',
             background: 'var(--accent)',
             color: 'var(--on-accent)',
@@ -313,8 +313,9 @@ export function HomeScreen({ go }: HomeScreenProps) {
     if (!user || loading || days.length === 0) return
     const guard = `recapShown_${user.id}_${isoWeekKey()}`
     if (localStorage.getItem(guard)) return
-    const hasData = days.some((d) => d.mealCount > 0)
-    if (!hasData) return
+    // Celebrating "your week" minutes after signup reads as fake — wait for a real week.
+    const loggedDays = days.filter((d) => d.mealCount > 0).length
+    if (loggedDays < 3) return
     localStorage.setItem(guard, '1')
     const t = setTimeout(() => setShowRecap(true), 1200)
     return () => clearTimeout(t)
@@ -420,7 +421,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
             style={{
               width: 38,
               height: 38,
-              borderRadius: 12,
+              borderRadius: 10,
               background: 'var(--surface)',
               border: '1px solid var(--line)',
               color: 'var(--text-muted)',
@@ -441,12 +442,12 @@ export function HomeScreen({ go }: HomeScreenProps) {
 
       {/* Onboarding hand-off: first meal plan being generated */}
       {planPending && (
-        <Card style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', display: 'grid', placeItems: 'center', fontSize: 18, flexShrink: 0 }}>
+        <Card style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--accent)', display: 'grid', placeItems: 'center', fontSize: 18, flexShrink: 0 }}>
             🌿
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
               Sage is building your day…
             </div>
             <Skeleton width="80%" height={10} />
@@ -463,7 +464,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
           style={{
             background: 'var(--accent-wash)',
             border: '1px solid var(--accent-line)',
-            borderRadius: 18,
+            borderRadius: 14,
             padding: '14px 16px',
             cursor: 'pointer',
             textAlign: 'left',
@@ -477,10 +478,10 @@ export function HomeScreen({ go }: HomeScreenProps) {
             🌿
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 10.5, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.12em', marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.12em', marginBottom: 4 }}>
               ✦ SAGE NOTICED
             </div>
-            <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.5 }}>{insight.insight}</div>
+            <div style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.5 }}>{insight.insight}</div>
             {insight.cta && (
               <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, marginTop: 6 }}>
                 {insight.cta} →
@@ -492,7 +493,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
 
       {/* Next Meal countdown */}
       {nextMeal && (
-        <Card onClick={() => go('plans')} style={{ display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer' }}>
+        <Card onClick={() => go('plans')} style={{ display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer' }}>
           <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', fontSize: 24, flexShrink: 0 }}>
             {nextMeal.meal.emoji}
           </div>
@@ -500,7 +501,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)', fontFamily: 'var(--sans)' }}>
               Next: {nextMeal.meal.type}
             </div>
-            <div style={{ fontSize: 14.5, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
+            <div style={{ fontSize: 14, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 2 }}>
               {nextMeal.meal.name}
             </div>
           </div>
@@ -589,7 +590,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
             flex: 1,
             background: 'var(--surface)',
             border: '1px solid var(--line)',
-            borderRadius: 16,
+            borderRadius: 14,
             padding: '12px 14px',
             cursor: 'pointer',
             display: 'flex',
@@ -601,15 +602,21 @@ export function HomeScreen({ go }: HomeScreenProps) {
           <IconMoon size={18} />
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>SLEEP</div>
-            <div style={{ fontSize: 15, fontFamily: 'var(--serif)', color: 'var(--text)' }}>
-              {(() => {
-                // Last night = today's morning-of row, else yesterday's.
-                const today = days[days.length - 1]
-                const yest = days.length >= 2 ? days[days.length - 2] : null
-                const mins = today?.sleepMinutes ?? yest?.sleepMinutes ?? null
-                return mins != null ? `${Math.round((mins / 60) * 10) / 10}h` : '—'
-              })()}
-            </div>
+            {(() => {
+              // Last night = today's morning-of row, else yesterday's.
+              const today = days[days.length - 1]
+              const yest = days.length >= 2 ? days[days.length - 2] : null
+              const mins = today?.sleepMinutes ?? yest?.sleepMinutes ?? null
+              return mins != null ? (
+                <div style={{ fontSize: 15, fontFamily: 'var(--serif)', color: 'var(--text)' }}>
+                  {Math.round((mins / 60) * 10) / 10}h
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, fontFamily: 'var(--sans)', color: 'var(--text-dim)' }}>
+                  Log last night →
+                </div>
+              )
+            })()}
           </div>
         </button>
 
@@ -619,7 +626,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
             flex: 1,
             background: 'var(--surface)',
             border: '1px solid var(--line)',
-            borderRadius: 16,
+            borderRadius: 14,
             padding: '12px 14px',
             cursor: 'pointer',
             display: 'flex',
@@ -631,20 +638,22 @@ export function HomeScreen({ go }: HomeScreenProps) {
           <IconMood size={18} />
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>MOOD</div>
-            <div style={{ fontSize: 15, fontFamily: 'var(--serif)', color: 'var(--text)' }}>
-              {lastMood ? `${moodEmoji[lastMood.mood] ?? ''} ${lastMood.mood}` : '—'}
+            <div style={{ fontSize: lastMood ? 15 : 12, fontFamily: lastMood ? 'var(--serif)' : 'var(--sans)', color: lastMood ? 'var(--text)' : 'var(--text-dim)' }}>
+              {lastMood ? `${moodEmoji[lastMood.mood] ?? ''} ${lastMood.mood}` : 'Check in →'}
             </div>
           </div>
         </button>
       </div>
 
-      {/* Coach Nudge */}
+      {/* Coach Nudge — only when Sage's insight card isn't already showing
+          (two gold Sage cards stacked on one screen read as clutter) */}
+      {!insight && (
       <button
         onClick={() => go('coach')}
         style={{
           background: 'var(--accent-wash)',
           border: '1px solid var(--accent-line)',
-          borderRadius: 18,
+          borderRadius: 14,
           padding: '14px 18px',
           cursor: 'pointer',
           display: 'flex',
@@ -659,7 +668,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
             style={{
               width: 34,
               height: 34,
-              borderRadius: 12,
+              borderRadius: 10,
               background: 'var(--accent)',
               display: 'flex',
               alignItems: 'center',
@@ -680,6 +689,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
         </div>
         <IconChevR size={18} />
       </button>
+      )}
 
       {/* Meal Plan button */}
       <button
@@ -688,7 +698,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
           width: '100%',
           background: 'var(--surface)',
           border: '1px solid var(--line)',
-          borderRadius: 18,
+          borderRadius: 14,
           padding: '14px 18px',
           cursor: 'pointer',
           display: 'flex',
@@ -698,7 +708,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 20 }}>📅</span>
+          <span style={{ color: 'var(--text-muted)', display: 'flex' }}><IconCalendar size={20} /></span>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Today's Meal Plan</div>
             <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
@@ -795,7 +805,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
         return (
           <Card>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', fontSize: 20, flexShrink: 0 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', fontSize: 20, flexShrink: 0 }}>
                 {g.emoji}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -809,8 +819,8 @@ export function HomeScreen({ go }: HomeScreenProps) {
                   <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, marginTop: 4 }}>{momentum}</div>
                 )}
                 {progressPct != null && (
-                  <div style={{ height: 5, borderRadius: 5, background: 'var(--ring-track)', overflow: 'hidden', marginTop: 8 }}>
-                    <div style={{ height: '100%', width: `${progressPct * 100}%`, background: 'var(--accent)', borderRadius: 5, transition: 'width 0.6s ease' }} />
+                  <div style={{ height: 5, borderRadius: 4, background: 'var(--ring-track)', overflow: 'hidden', marginTop: 8 }}>
+                    <div style={{ height: '100%', width: `${progressPct * 100}%`, background: 'var(--accent)', borderRadius: 4, transition: 'width 0.6s ease' }} />
                   </div>
                 )}
               </div>
@@ -880,17 +890,17 @@ export function HomeScreen({ go }: HomeScreenProps) {
           >
             ›
           </span>
-          <span style={{ fontSize: 18 }}>💧</span>
+          <span style={{ color: 'oklch(0.74 0.10 230)', display: 'flex' }}><IconDrop size={18} /></span>
           <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--sans)', fontWeight: 600 }}>
             {waterToday > 0 ? `${waterToday >= 1000 ? `${(waterToday / 1000).toFixed(1)}L` : `${waterToday}ml`}` : 'Water'}
             <span style={{ color: 'var(--accent)' }}> +</span>
           </span>
         </button>
         {[
-          { key: 'weight', emoji: '⚖️', label: 'Weight' },
+          { key: 'weight', icon: <IconScale size={18} />, label: 'Weight' },
           ...(profile?.gender === 'Male'
-            ? [{ key: 'mood', emoji: '😊', label: 'Mood' }]
-            : [{ key: 'cycle', emoji: '🌙', label: 'Cycle' }]),
+            ? [{ key: 'mood', icon: <IconMood size={18} />, label: 'Mood' }]
+            : [{ key: 'cycle', icon: <IconMoon size={18} />, label: 'Cycle' }]),
         ].map((q) => (
           <button
             key={q.key}
@@ -909,7 +919,7 @@ export function HomeScreen({ go }: HomeScreenProps) {
               gap: 4,
             }}
           >
-            <span style={{ fontSize: 18 }}>{q.emoji}</span>
+            <span style={{ color: 'var(--text-muted)', display: 'flex' }}>{q.icon}</span>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--sans)', fontWeight: 600 }}>{q.label}</span>
           </button>
         ))}

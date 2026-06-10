@@ -352,7 +352,7 @@ export function CoachScreen({ go }: CoachScreenProps) {
             style={{
               background: 'var(--accent-wash)',
               border: '1px solid var(--accent-line)',
-              borderRadius: 100,
+              borderRadius: 999,
               padding: '6px 12px',
               color: 'var(--text-muted)',
               fontSize: 12,
@@ -409,7 +409,10 @@ export function CoachScreen({ go }: CoachScreenProps) {
         </IconButton>
       </div>
 
-      {/* Messages */}
+      {/* Messages — anchored to the bottom near the composer (a short
+          conversation used to float at the top with a void below it).
+          The auto-margin spacer keeps long threads scrollable, unlike
+          justify-content: flex-end which clips overflow at the top. */}
       <div
         style={{
           flex: 1,
@@ -420,6 +423,7 @@ export function CoachScreen({ go }: CoachScreenProps) {
           gap: 12,
         }}
       >
+        <div style={{ marginTop: 'auto' }} />
         {/* Prompt chips (only show if just initial message) */}
         {messages.length === 1 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
@@ -430,7 +434,7 @@ export function CoachScreen({ go }: CoachScreenProps) {
                 style={{
                   background: 'var(--surface)',
                   border: '1px solid var(--line)',
-                  borderRadius: 100,
+                  borderRadius: 999,
                   padding: '8px 14px',
                   color: 'var(--text-muted)',
                   fontSize: 13,
@@ -568,7 +572,7 @@ export function CoachScreen({ go }: CoachScreenProps) {
             flex: 1,
             background: 'var(--surface)',
             border: '1px solid var(--line)',
-            borderRadius: 18,
+            borderRadius: 14,
             padding: '12px 18px',
             color: 'var(--text)',
             fontFamily: 'var(--sans)',

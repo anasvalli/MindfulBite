@@ -214,7 +214,7 @@ export function WeightScreen({ go }: WeightScreenProps) {
         padding: '56px 20px 40px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 18,
+        gap: 16,
       }}
     >
       {/* Header */}

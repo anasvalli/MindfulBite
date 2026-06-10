@@ -172,7 +172,7 @@ export function MealScheduleScreen({ go }: MealScheduleScreenProps) {
             background: saving ? 'var(--accent-wash)' : 'var(--accent)',
             color: saving ? 'var(--text-dim)' : 'var(--on-accent)',
             border: 'none',
-            borderRadius: 18,
+            borderRadius: 14,
             fontFamily: 'var(--sans)',
             fontSize: 15,
             fontWeight: 700,

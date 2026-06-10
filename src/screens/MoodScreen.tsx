@@ -305,9 +305,9 @@ export function MoodScreen({ go }: MoodScreenProps) {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 5,
+                gap: 6,
                 padding: '12px 4px',
-                borderRadius: 16,
+                borderRadius: 14,
                 border: isSelected
                   ? `1px solid oklch(0.78 0.09 ${mood.hue})`
                   : '1px solid var(--line)',
@@ -351,7 +351,7 @@ export function MoodScreen({ go }: MoodScreenProps) {
                   onClick={() => setSelectedContext(key)}
                   style={{
                     padding: '7px 13px',
-                    borderRadius: 24,
+                    borderRadius: 22,
                     border: sel ? '1px solid var(--accent-line)' : '1px solid var(--line)',
                     background: sel ? 'var(--accent-wash)' : 'var(--surface-2)',
                     color: sel ? 'var(--accent)' : 'var(--text-muted)',
@@ -403,7 +403,7 @@ export function MoodScreen({ go }: MoodScreenProps) {
               boxSizing: 'border-box',
               background: 'var(--surface-2)',
               border: '1px solid var(--line)',
-              borderRadius: 12,
+              borderRadius: 10,
               padding: '10px 14px',
               fontFamily: 'var(--sans)',
               fontSize: 13,
@@ -448,7 +448,7 @@ export function MoodScreen({ go }: MoodScreenProps) {
               : 'var(--accent)',
             color: saved ? '#fff' : saving ? 'var(--text-dim)' : 'var(--on-accent)',
             border: 'none',
-            borderRadius: 18,
+            borderRadius: 14,
             fontFamily: 'var(--sans)',
             fontSize: 15,
             fontWeight: 700,
@@ -523,7 +523,7 @@ export function MoodScreen({ go }: MoodScreenProps) {
                     {c.mood}
                   </span>
                   {/* Intensity dots */}
-                  <div style={{ display: 'flex', gap: 3 }}>
+                  <div style={{ display: 'flex', gap: 4 }}>
                     {[1, 2, 3, 4, 5].map((n) => (
                       <span
                         key={n}
@@ -579,7 +579,7 @@ export function MoodScreen({ go }: MoodScreenProps) {
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
-                      gap: 5,
+                      gap: 6,
                       flex: 1,
                     }}
                   >
