@@ -24,6 +24,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Web Push handlers (push + notificationclick) live in public/push-sw.js.
+        importScripts: ['push-sw.js'],
         // Precache the app shell: JS, CSS, HTML, SVG and image assets.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
         // Single-page-app fallback so deep links work offline.

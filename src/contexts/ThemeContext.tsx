@@ -109,4 +109,14 @@ function applyThemeVars(dark: boolean, hue: number) {
     root.style.setProperty('--accent-wash', `oklch(0.56 0.10 ${hue} / 0.10)`)
     root.style.setProperty('--accent-line', `oklch(0.56 0.10 ${hue} / 0.26)`)
   }
+
+  // Keep the browser chrome (status bar / PWA title bar) in sync with the
+  // active theme — index.html hardcodes a dark value that's wrong in light mode.
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    document.head.appendChild(meta)
+  }
+  meta.content = dark ? '#1d231e' : '#f3f1ec'
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Eyebrow, Spinner } from '../components/ui'
+import { Card, Eyebrow, Spinner, IconButton, toast, haptic } from '../components/ui'
 import { IconChevL, IconCheck } from '../components/icons'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -129,6 +129,7 @@ export function CycleScreen({ go }: CycleScreenProps) {
   async function save() {
     if (!user || !selected || saving) return
     setSaving(true)
+    haptic()
     const { error } = await supabase.from('cycle_logs').upsert(
       {
         user_id: user.id,
@@ -139,9 +140,12 @@ export function CycleScreen({ go }: CycleScreenProps) {
       },
       { onConflict: 'user_id,date' }
     )
-    if (!error) {
+    if (error) {
+      toast("Couldn't save — you're offline", { type: 'error' })
+    } else {
       await load()
       setSelected(null)
+      toast('Cycle day saved')
     }
     setSaving(false)
   }
@@ -193,20 +197,9 @@ export function CycleScreen({ go }: CycleScreenProps) {
     >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-        <button
-          onClick={() => go('settings')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <IconChevL size={20} />
-        </button>
+        <IconButton label="Back" onClick={() => go('back')} style={{ color: 'var(--text-muted)', marginLeft: -10 }}>
+          <IconChevL size={22} />
+        </IconButton>
         <h1
           style={{
             position: 'absolute',

@@ -2,25 +2,37 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import type { Meal } from '../types'
-import { Ring, Card, Eyebrow, Bars, MacroBar, Spinner } from '../components/ui'
+import { Ring, Card, Eyebrow, MacroBar, Spinner, IconButton } from '../components/ui'
 import { IconChevL, IconClose } from '../components/icons'
+import { macroTargets } from '../lib/targets'
+import { aggregateDays, type DayAgg } from '../lib/aggregate'
 
 interface NutritionScreenProps {
   go: (screen: string) => void
 }
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+type Metric = 'calories' | 'protein' | 'carbs' | 'fat'
+const METRICS: { key: Metric; label: string; unit: string; color: string }[] = [
+  { key: 'calories', label: 'Cal', unit: 'kcal', color: 'var(--accent)' },
+  { key: 'protein', label: 'Protein', unit: 'g', color: 'oklch(0.75 0.12 180)' },
+  { key: 'carbs', label: 'Carbs', unit: 'g', color: 'oklch(0.72 0.14 85)' },
+  { key: 'fat', label: 'Fat', unit: 'g', color: 'oklch(0.70 0.12 55)' },
+]
 
 export function NutritionScreen({ go }: NutritionScreenProps) {
   const { user, profile } = useAuth()
   const [todayMeals, setTodayMeals] = useState<Meal[]>([])
-  const [weeklyData, setWeeklyData] = useState<number[]>([0, 0, 0, 0, 0, 0, 0])
-  const [weekDayLabels, setWeekDayLabels] = useState<string[]>([])
+  const [days, setDays] = useState<DayAgg[]>([])
+  const [range, setRange] = useState<7 | 30>(7)
+  const [metric, setMetric] = useState<Metric>('calories')
+  const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const goal = profile?.daily_calorie_goal ?? 2150
+  // One source of truth for every target on this screen.
+  const targets = macroTargets(profile)
+  const goal = targets.calories
   const eaten = todayMeals.reduce((s, m) => s + (m.total_calories ?? 0), 0)
   const totalProtein = todayMeals.reduce((s, m) => s + (m.macros_json?.protein ?? 0), 0)
   const totalCarbs = todayMeals.reduce((s, m) => s + (m.macros_json?.carbs ?? 0), 0)
@@ -35,51 +47,18 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
         const startOfDay = new Date()
         startOfDay.setHours(0, 0, 0, 0)
 
-        const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-        sevenDaysAgo.setHours(0, 0, 0, 0)
-
-        const [todayRes, weekRes] = await Promise.all([
+        const [todayRes, agg] = await Promise.all([
           supabase
             .from('meals')
             .select('*')
             .eq('user_id', uid)
             .gte('created_at', startOfDay.toISOString())
             .order('created_at', { ascending: false }),
-          supabase
-            .from('meals')
-            .select('total_calories, created_at')
-            .eq('user_id', uid)
-            .gte('created_at', sevenDaysAgo.toISOString()),
+          aggregateDays(uid, 30),
         ])
 
         if (todayRes.data) setTodayMeals(todayRes.data as Meal[])
-
-        // Build 7-day aggregation
-        const buckets: number[] = [0, 0, 0, 0, 0, 0, 0]
-        const labels: string[] = []
-        const today = new Date()
-
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date(today)
-          d.setDate(d.getDate() - i)
-          labels.push(DAYS[d.getDay()] ?? '')
-        }
-        setWeekDayLabels(labels)
-
-        if (weekRes.data) {
-          const todayEnd = (() => { const d = new Date(); d.setHours(23, 59, 59, 999); return d.getTime() })()
-          for (const row of weekRes.data) {
-            const rowDate = new Date(row.created_at as string)
-            const diffMs = todayEnd - rowDate.getTime()
-            const diffDays = Math.floor(diffMs / 86400000)
-            const idx = 6 - diffDays
-            if (idx >= 0 && idx < 7) {
-              buckets[idx] = (buckets[idx] ?? 0) + ((row.total_calories as number) ?? 0)
-            }
-          }
-        }
-        setWeeklyData(buckets)
+        setDays(agg)
       } catch (err) {
         console.warn('NutritionScreen load error:', err)
       } finally {
@@ -135,13 +114,10 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
   return (
     <div className="mb-screen" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button
-          onClick={() => go('home')}
-          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}
-        >
-          <IconChevL size={20} />
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <IconButton label="Back" onClick={() => go('back')} style={{ color: 'var(--text-muted)', marginLeft: -10 }}>
+          <IconChevL size={22} />
+        </IconButton>
         <h2
           style={{
             fontFamily: 'var(--serif)',
@@ -201,9 +177,9 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
         <Eyebrow style={{ display: 'block', marginBottom: 14 }}>Macronutrients</Eyebrow>
         <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: 20 }}>
           {[
-            { label: 'Protein', val: totalProtein, goal: (goal * 0.30) / 4, color: 'oklch(0.75 0.12 180)' },
-            { label: 'Carbs', val: totalCarbs, goal: (goal * 0.45) / 4, color: 'oklch(0.72 0.14 85)' },
-            { label: 'Fat', val: totalFat, goal: (goal * 0.25) / 9, color: 'oklch(0.70 0.12 55)' },
+            { label: 'Protein', val: totalProtein, goal: targets.protein, color: 'oklch(0.75 0.12 180)' },
+            { label: 'Carbs', val: totalCarbs, goal: targets.carbs, color: 'oklch(0.72 0.14 85)' },
+            { label: 'Fat', val: totalFat, goal: targets.fat, color: 'oklch(0.70 0.12 55)' },
           ].map(({ label, val, goal: g, color }) => (
             <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
               <Ring size={70} stroke={6} progress={g > 0 ? val / g : 0} color={color}>
@@ -218,37 +194,135 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
           ))}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <MacroBar label="Protein" value={totalProtein} goal={(goal * 0.30) / 4} color="oklch(0.75 0.12 180)" />
-          <MacroBar label="Carbs" value={totalCarbs} goal={(goal * 0.45) / 4} color="oklch(0.72 0.14 85)" />
-          <MacroBar label="Fat" value={totalFat} goal={(goal * 0.25) / 9} color="oklch(0.70 0.12 55)" />
+          <MacroBar label="Protein" value={totalProtein} goal={targets.protein} color="oklch(0.75 0.12 180)" />
+          <MacroBar label="Carbs" value={totalCarbs} goal={targets.carbs} color="oklch(0.72 0.14 85)" />
+          <MacroBar label="Fat" value={totalFat} goal={targets.fat} color="oklch(0.70 0.12 55)" />
         </div>
       </Card>
 
-      {/* Weekly Bar Chart */}
+      {/* Trend chart — pick a metric, see it against the goal */}
       <Card>
-        <Eyebrow style={{ display: 'block', marginBottom: 14 }}>This Week</Eyebrow>
-        <div style={{ overflowX: 'auto' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <Bars data={weeklyData} w={30} h={72} active={6} />
-            <div style={{ display: 'flex', gap: 4 }}>
-              {weekDayLabels.map((d, i) => (
-                <div
-                  key={i}
+        {(() => {
+          const m = METRICS.find((x) => x.key === metric)!
+          const goalFor: Record<Metric, number> = {
+            calories: targets.calories,
+            protein: targets.protein,
+            carbs: targets.carbs,
+            fat: targets.fat,
+          }
+          const view = days.slice(-range)
+          const values = view.map((d) => d[metric])
+          const maxVal = Math.max(...values, goalFor[metric])
+          const H = 84
+          const sel = selectedDay !== null && view[selectedDay] ? selectedDay : null
+          return (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Eyebrow>{range === 7 ? 'This Week' : 'Last 30 Days'}</Eyebrow>
+                <button
+                  onClick={() => { setRange(range === 7 ? 30 : 7); setSelectedDay(null) }}
                   style={{
-                    width: 30,
-                    textAlign: 'center',
-                    fontSize: 10,
-                    color: i === 6 ? 'var(--accent)' : 'var(--text-dim)',
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 10,
+                    padding: '5px 12px',
+                    cursor: 'pointer',
                     fontFamily: 'var(--mono)',
-                    flexShrink: 0,
+                    fontSize: 11,
+                    color: 'var(--text-muted)',
                   }}
                 >
-                  {d}
+                  {range === 7 ? '7d' : '30d'}
+                </button>
+              </div>
+
+              {/* Metric chips */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+                {METRICS.map((x) => (
+                  <button
+                    key={x.key}
+                    onClick={() => { setMetric(x.key); setSelectedDay(null) }}
+                    style={{
+                      background: metric === x.key ? x.color : 'var(--surface-2)',
+                      color: metric === x.key ? 'var(--on-accent)' : 'var(--text-muted)',
+                      border: 'none',
+                      borderRadius: 10,
+                      padding: '6px 12px',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--sans)',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {x.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Selected-bar readout */}
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, minHeight: 16, textAlign: 'center' }}>
+                {sel !== null
+                  ? `${view[sel].label}: ${Math.round(view[sel][metric])} ${m.unit} · ${view[sel][metric] >= goalFor[metric] ? '+' : '−'}${Math.abs(Math.round(view[sel][metric] - goalFor[metric]))} vs goal`
+                  : `${m.label} eaten per day — dashed line is your ${Math.round(goalFor[metric])} ${m.unit} goal`}
+              </div>
+
+              {/* Bars + goal line */}
+              <div style={{ position: 'relative' }}>
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: (range === 7 ? 22 : 4) + (goalFor[metric] / maxVal) * H,
+                    borderTop: `1.5px dashed ${m.color}`,
+                    opacity: 0.55,
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                  }}
+                />
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: range === 7 ? 6 : 2, height: H + (range === 7 ? 22 : 4) }}>
+                  {view.map((d, i) => (
+                    <button
+                      key={d.date}
+                      aria-label={`${d.label}: ${Math.round(d[metric])} ${m.unit}`}
+                      onClick={() => setSelectedDay(sel === i ? null : i)}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: 4,
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        height: '100%',
+                        minWidth: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '100%',
+                          maxWidth: range === 7 ? 30 : 10,
+                          height: Math.max(3, (d[metric] / maxVal) * H),
+                          background: i === view.length - 1 || sel === i ? m.color : 'var(--surface-2)',
+                          borderRadius: 4,
+                          transition: 'height 0.5s ease',
+                        }}
+                      />
+                      {range === 7 && (
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: i === view.length - 1 ? m.color : 'var(--text-dim)' }}>
+                          {d.label}
+                        </span>
+                      )}
+                    </button>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
+              </div>
+            </>
+          )
+        })()}
       </Card>
 
       {/* Today's Meals */}
@@ -278,6 +352,7 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
                 >
                   {/* Delete button */}
                   <button
+                    aria-label="Delete meal"
                     onClick={(e) => {
                       e.stopPropagation()
                       handleDelete(meal.id)
@@ -438,7 +513,7 @@ export function NutritionScreen({ go }: NutritionScreenProps) {
           gap: 8,
         }}
       >
-        📷 Snap Your Next Meal
+        📷 {todayMeals.length === 0 ? 'Snap Your First Meal' : 'Snap Your Next Meal'}
       </button>
     </div>
   )

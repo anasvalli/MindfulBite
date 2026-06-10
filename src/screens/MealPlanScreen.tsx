@@ -1,58 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { Card, Eyebrow, Spinner } from '../components/ui'
+import { Card, Eyebrow, Spinner, IconButton } from '../components/ui'
 import { IconChevL, IconPlus } from '../components/icons'
 import { scheduleMealReminders, isNotificationsEnabled } from '../lib/notifications'
-import { parseTime12h } from '../lib/time'
+import {
+  loadMealPlan,
+  generateMealPlan,
+  isMealPlanPending,
+  type MealPlanItem,
+} from '../lib/mealPlan'
 
 interface MealPlanScreenProps {
   go: (screen: string) => void
 }
 
-// Compute meal times that respect the user's actual wake/sleep window.
-// breakfast ≈ 45m after waking, dinner ≈ 2.5h before sleep, lunch & snack spread between.
-function computeMealTimes(wake: string | null | undefined, sleep: string | null | undefined): Record<MealType, string> {
-  const toMin = (s: string | null | undefined, def: number): number => {
-    const d = s ? parseTime12h(s) : null
-    return d ? d.getHours() * 60 + d.getMinutes() : def
-  }
-  const fmt = (mins: number): string => {
-    let m = ((mins % 1440) + 1440) % 1440
-    let h = Math.floor(m / 60)
-    const mm = Math.round(m % 60)
-    const ap = h < 12 ? 'AM' : 'PM'
-    h = h % 12 === 0 ? 12 : h % 12
-    return `${h}:${String(mm).padStart(2, '0')} ${ap}`
-  }
-  const wakeMin = toMin(wake, 8 * 60) // default 8:00 AM
-  let sleepMin = toMin(sleep, 23 * 60) // default 11:00 PM
-  if (sleepMin <= wakeMin) sleepMin += 24 * 60 // sleeps past midnight
-  const breakfast = wakeMin + 45
-  const dinner = sleepMin - 150
-  const span = Math.max(120, dinner - breakfast)
-  return {
-    breakfast: fmt(breakfast),
-    lunch: fmt(breakfast + span * 0.42),
-    snacks: fmt(breakfast + span * 0.7),
-    dinner: fmt(dinner),
-  }
-}
-
-type MealType = 'breakfast' | 'lunch' | 'snacks' | 'dinner'
-
-interface MealPlanItem {
-  type: MealType
-  name: string
-  calories: number
-  emoji: string
-  time: string
-  protein?: number
-  carbs?: number
-  fat?: number
-}
-
-const MEAL_PLAN_KEY = 'mealPlan'
+// Plan generation, storage, and wake/sleep-aware meal times all live in
+// lib/mealPlan — shared with Onboarding (auto-first-plan) and Home (brief).
 
 export function MealPlanScreen({ go }: MealPlanScreenProps) {
   const { profile, user } = useAuth()
@@ -62,93 +26,40 @@ export function MealPlanScreen({ go }: MealPlanScreenProps) {
   const [toastItem, setToastItem] = useState<string | null>(null)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
 
-  // Load saved plan from localStorage on mount
+  // Load the saved plan; if onboarding kicked off a generation that's still in
+  // flight, show the generating state and pick the plan up when it lands.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(MEAL_PLAN_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as MealPlanItem[]
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setPlan(parsed)
-        }
-      }
-    } catch {
-      // ignore parse errors
-    }
-  }, [])
+    if (!user) return
+    const stored = loadMealPlan(user.id)
+    if (stored && stored.items.length > 0) setPlan(stored.items)
+    if (!isMealPlanPending(user.id)) return
+    setGenerating(true)
+    const iv = window.setInterval(() => {
+      if (isMealPlanPending(user.id)) return
+      window.clearInterval(iv)
+      const done = loadMealPlan(user.id)
+      if (done && done.items.length > 0) setPlan(done.items)
+      setGenerating(false)
+    }, 1200)
+    return () => window.clearInterval(iv)
+  }, [user?.id])
 
   async function generatePlan() {
+    if (!user) return
     setGenerating(true)
     setError(null)
-
-    const prefs = profile?.dietary_prefs ?? 'None'
-    const goal = profile?.daily_calorie_goal ?? 2150
-    const cuisine = profile?.cuisine_pref ?? 'no specific preference'
-    const weightGoal =
-      profile?.goal_weight && profile?.weight
-        ? profile.goal_weight < profile.weight
-          ? 'lose weight'
-          : profile.goal_weight > profile.weight
-          ? 'gain muscle'
-          : 'maintain weight'
-        : 'maintain weight'
-
-    const times = computeMealTimes(profile?.wake_time, profile?.sleep_time)
-    const message = `Generate a 1-day meal plan for me. My cuisine preference is ${cuisine}. Make all meals authentic to ${cuisine} cuisine.
-My profile: ${prefs} diet, ${goal} kcal daily goal, goal: ${weightGoal}.
-I wake at ${profile?.wake_time ?? '8:00 AM'} and sleep at ${profile?.sleep_time ?? '11:00 PM'}, so use EXACTLY these meal times: breakfast ${times.breakfast}, lunch ${times.lunch}, snacks ${times.snacks}, dinner ${times.dinner}.
-Return ONLY a JSON array, no text before or after:
-[
-  {"type":"breakfast","name":"meal name","calories":N,"emoji":"🍳","time":"${times.breakfast}","protein":N,"carbs":N,"fat":N},
-  {"type":"lunch","name":"meal name","calories":N,"emoji":"🥗","time":"${times.lunch}","protein":N,"carbs":N,"fat":N},
-  {"type":"snacks","name":"meal name","calories":N,"emoji":"🍎","time":"${times.snacks}","protein":N,"carbs":N,"fat":N},
-  {"type":"dinner","name":"meal name","calories":N,"emoji":"🍽️","time":"${times.dinner}","protein":N,"carbs":N,"fat":N}
-]
-Make meals culturally appropriate for my diet preferences. Total should be close to ${goal} kcal.`
-
     try {
-      const res = await fetch('/api/claude', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          history: [],
-          userContext: `User dietary preferences: ${prefs}. Calorie goal: ${goal} kcal. Cuisine preference: ${cuisine}.`,
-          userId: user?.id,
-        }),
-      })
-
-      if (!res.ok) {
-        throw new Error(`Server error ${res.status}`)
-      }
-
-      const data = await res.json() as { reply: string; error?: string }
-
-      if (data.error) {
-        throw new Error(data.error)
-      }
-
-      const match = data.reply.match(/\[[\s\S]*\]/)
-      if (!match) {
-        throw new Error('Invalid response format — could not parse meal plan.')
-      }
-
-      const items = JSON.parse(match[0]) as MealPlanItem[]
-
-      if (!Array.isArray(items) || items.length === 0) {
-        throw new Error('Empty meal plan returned.')
-      }
-
-      // Guarantee times respect the user's wake/sleep window, regardless of the model.
-      items.forEach((it) => {
-        if (times[it.type]) it.time = times[it.type]
-      })
-
+      const items = await generateMealPlan(user.id, profile)
       setPlan(items)
-      localStorage.setItem(MEAL_PLAN_KEY, JSON.stringify(items))
       if (isNotificationsEnabled()) scheduleMealReminders(items)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      // Map raw fetch internals to a human sentence.
+      const raw = err instanceof Error ? err.message : ''
+      setError(
+        /failed to fetch|networkerror|load failed/i.test(raw)
+          ? "You're offline — check your connection and try again."
+          : raw || 'Something went wrong.',
+      )
     } finally {
       setGenerating(false)
     }
@@ -215,12 +126,9 @@ Make meals culturally appropriate for my diet preferences. Total should be close
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={() => go('home')}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}
-          >
-            <IconChevL size={20} />
-          </button>
+          <IconButton label="Back" onClick={() => go('back')} style={{ color: 'var(--text-muted)', marginLeft: -10 }}>
+            <IconChevL size={22} />
+          </IconButton>
           <h2
             style={{
               fontFamily: 'var(--sans)',

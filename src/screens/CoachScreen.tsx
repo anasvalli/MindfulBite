@@ -4,6 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import type { ChatMessage, Meal, MealMood } from '../types'
 import { IconClose, IconSend } from '../components/icons'
+import { IconButton } from '../components/ui'
 import { isAtChatLimit, incrementChatCount, remainingChats } from '../lib/chatLimits'
 import { goalContext } from '../lib/goals'
 
@@ -12,12 +13,17 @@ interface CoachScreenProps {
 }
 
 function renderMarkdown(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/)
+  // Bold (**x**) and italic (*x*) — Sage's welcome literally says "the *what*"
+  // and used to render raw asterisks. Unmatched asterisks are stripped.
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*)/)
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={i}>{part.slice(2, -2)}</strong>
     }
-    return <span key={i}>{part}</span>
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+      return <em key={i}>{part.slice(1, -1)}</em>
+    }
+    return <span key={i}>{part.replace(/\*/g, '')}</span>
   })
 }
 
@@ -55,6 +61,16 @@ export function CoachScreen({ go }: CoachScreenProps) {
   ])
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
+  // After ~4s of dots, add an explicit status so a slow reply doesn't read as a hang.
+  const [thinkingLong, setThinkingLong] = useState(false)
+  useEffect(() => {
+    if (!isThinking) {
+      setThinkingLong(false)
+      return
+    }
+    const t = window.setTimeout(() => setThinkingLong(true), 4000)
+    return () => window.clearTimeout(t)
+  }, [isThinking])
   const [userContext, setUserContext] = useState('')
   const [mealMoodCtx, setMealMoodCtx] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -388,18 +404,9 @@ export function CoachScreen({ go }: CoachScreenProps) {
             </div>
           )}
         </div>
-        <button
-          onClick={() => go('home')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            padding: 8,
-          }}
-        >
+        <IconButton label="Close chat" onClick={() => go('back')} style={{ color: 'var(--text-muted)' }}>
           <IconClose size={20} />
-        </button>
+        </IconButton>
       </div>
 
       {/* Messages */}
@@ -526,6 +533,11 @@ export function CoachScreen({ go }: CoachScreenProps) {
                   }}
                 />
               ))}
+              {thinkingLong && (
+                <span style={{ fontFamily: 'var(--sans)', fontSize: 12, color: 'var(--text-dim)', marginLeft: 4 }}>
+                  Sage is thinking…
+                </span>
+              )}
             </div>
           </div>
         )}

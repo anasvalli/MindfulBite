@@ -15,8 +15,12 @@ import {
   getReminderPrefs,
   setReminderPrefs,
   scheduleAllReminders,
+  maybeAskNotificationPermission,
+  subscribePush,
+  unsubscribePush,
   type ReminderPrefs,
 } from '../lib/notifications'
+import { loadMealPlan } from '../lib/mealPlan'
 
 interface SettingsScreenProps {
   go: (screen: string) => void
@@ -127,16 +131,11 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
   }, [user, profile?.protein_goal, profile?.weight, profile?.daily_calorie_goal])
 
   function rescheduleReminders(prefs: ReminderPrefs) {
-    let mealPlan: any[] | null = null
-    try {
-      mealPlan = JSON.parse(localStorage.getItem('mealPlan') || 'null')
-    } catch {
-      mealPlan = null
-    }
+    const stored = user ? loadMealPlan(user.id) : null
     scheduleAllReminders({
       wakeTime: profile?.wake_time,
       sleepTime: profile?.sleep_time,
-      mealPlan,
+      mealPlan: stored?.items ?? null,
       prefs,
     })
   }
@@ -163,8 +162,31 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
   function toggleReminderPref(key: keyof ReminderPrefs) {
     const next = { ...reminderPrefs, [key]: !reminderPrefs[key] }
     setReminderPrefsState(next)
-    setReminderPrefs(next)
+    setReminderPrefs(next, user?.id)
     if (notifEnabled) rescheduleReminders(next)
+  }
+
+  // Morning brief = true background push (works with the app closed) sent at
+  // ~7 AM via the nightly cron. Toggling on asks permission + subscribes;
+  // toggling off unsubscribes this device.
+  async function toggleMorningBrief() {
+    if (!user) return
+    const turningOn = !reminderPrefs.morningBrief
+    const next = { ...reminderPrefs, morningBrief: turningOn }
+    if (turningOn) {
+      const granted = await maybeAskNotificationPermission(user.id)
+      if (!granted) {
+        const fallback = await requestNotificationPermission()
+        if (!fallback) return
+      }
+      const ok = await subscribePush(user.id)
+      if (!ok) return
+      setNotifEnabled(true)
+    } else {
+      await unsubscribePush(user.id)
+    }
+    setReminderPrefsState(next)
+    setReminderPrefs(next, user.id)
   }
 
   function openEdit(field: EditField) {
@@ -882,6 +904,51 @@ export function SettingsScreen({ go }: SettingsScreenProps) {
                 </div>
               )
             })}
+
+            {/* Morning brief — real background push, works with the app closed */}
+            <div
+              onClick={() => toggleMorningBrief()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 18px 12px 30px',
+                borderBottom: '1px solid var(--line)',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+                <span style={{ fontSize: 13.5, color: 'var(--text-muted)', display: 'block' }}>Morning brief</span>
+                <span style={{ fontSize: 11, color: 'var(--text-dim)', display: 'block', marginTop: 2 }}>
+                  A ~7 AM push with yesterday's recap — works even when the app is closed
+                </span>
+              </div>
+              <div
+                style={{
+                  width: 46,
+                  height: 26,
+                  borderRadius: 100,
+                  background: reminderPrefs.morningBrief ? 'var(--accent)' : 'var(--surface-2)',
+                  border: '1px solid var(--line)',
+                  position: 'relative',
+                  transition: 'background 0.2s',
+                  flexShrink: 0,
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    left: reminderPrefs.morningBrief ? 22 : 2,
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: reminderPrefs.morningBrief ? 'var(--on-accent)' : 'var(--text-dim)',
+                    transition: 'left 0.2s',
+                  }}
+                />
+              </div>
+            </div>
 
             {/* App Version */}
             <div

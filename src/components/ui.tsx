@@ -320,6 +320,159 @@ export const glassBtn: React.CSSProperties = {
   gap: 8,
 }
 
+// ─── Haptics ─────────────────────────────────────────────────────────────────
+// Tiny tactile confirmation on log/tap actions (no-op where unsupported).
+export function haptic(pattern: number | number[] = 10): void {
+  try {
+    navigator.vibrate?.(pattern)
+  } catch {
+    // unsupported — ignore
+  }
+}
+
+// ─── Toast ───────────────────────────────────────────────────────────────────
+// Global toast: call toast('Saved') from anywhere; <Toaster/> (mounted once in
+// App) renders it above the tab bar with an optional action (e.g. Undo).
+interface ToastItem {
+  id: number
+  text: string
+  type: 'success' | 'error' | 'info'
+  action?: { label: string; onClick: () => void }
+}
+
+let toastEmit: ((t: ToastItem) => void) | null = null
+let toastSeq = 1
+
+export function toast(
+  text: string,
+  opts?: { type?: 'success' | 'error' | 'info'; action?: { label: string; onClick: () => void } },
+): void {
+  toastEmit?.({ id: toastSeq++, text, type: opts?.type ?? 'success', action: opts?.action })
+}
+
+export function Toaster() {
+  const [items, setItems] = useState<ToastItem[]>([])
+
+  useEffect(() => {
+    toastEmit = (t) => {
+      setItems((prev) => [...prev.slice(-1), t])
+      window.setTimeout(() => {
+        setItems((prev) => prev.filter((x) => x.id !== t.id))
+      }, t.action ? 5000 : 3200)
+    }
+    return () => {
+      toastEmit = null
+    }
+  }, [])
+
+  if (items.length === 0) return null
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 'calc(104px + env(safe-area-inset-bottom, 0px))',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 8,
+        zIndex: 60,
+        pointerEvents: 'none',
+      }}
+    >
+      {items.map((t) => (
+        <div
+          key={t.id}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            maxWidth: '86%',
+            background: 'var(--surface)',
+            border: `1px solid ${t.type === 'error' ? 'oklch(0.62 0.16 25 / 0.5)' : 'var(--line)'}`,
+            borderRadius: 16,
+            boxShadow: '0 8px 28px rgba(0,0,0,0.22)',
+            padding: '11px 16px',
+            pointerEvents: 'auto',
+            animation: 'mb-toast-in 0.22s cubic-bezier(0.22,1,0.36,1)',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--sans)',
+              fontSize: 13,
+              fontWeight: 600,
+              color: t.type === 'error' ? 'oklch(0.68 0.15 25)' : 'var(--text)',
+            }}
+          >
+            {t.text}
+          </span>
+          {t.action && (
+            <button
+              onClick={() => {
+                t.action!.onClick()
+                setItems((prev) => prev.filter((x) => x.id !== t.id))
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'var(--sans)',
+                fontSize: 13,
+                fontWeight: 700,
+                color: 'var(--accent)',
+                padding: '2px 4px',
+                flexShrink: 0,
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── IconButton ──────────────────────────────────────────────────────────────
+// Icon-only button with a guaranteed ≥44px hit area (WCAG/iOS minimum) and a
+// required accessible name. Use for every chevron/gear/close in the app.
+interface IconButtonProps {
+  label: string
+  onClick?: () => void
+  children: React.ReactNode
+  size?: number
+  style?: React.CSSProperties
+  className?: string
+}
+
+export function IconButton({ label, onClick, children, size = 44, style, className }: IconButtonProps) {
+  return (
+    <button
+      aria-label={label}
+      onClick={onClick}
+      className={className ?? 'mb-press'}
+      style={{
+        minWidth: size,
+        minHeight: size,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: 0,
+        color: 'inherit',
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
 // ─── Spinner ──────────────────────────────────────────────────────────────────
 export function Spinner({ size = 46 }: { size?: number }) {
   return (

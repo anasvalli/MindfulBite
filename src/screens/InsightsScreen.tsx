@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
-import { Ring, Card, Eyebrow, MacroBar, Spinner } from '../components/ui'
+import { Ring, Card, Eyebrow, Spinner, IconButton, toast } from '../components/ui'
 import { IconChevL, IconTrend } from '../components/icons'
 import { MOOD_HUES, MOOD_EMOJIS } from '../lib/moods'
+import { macroTargets } from '../lib/targets'
+import { aggregateDays } from '../lib/aggregate'
+import { localDateKey } from '../lib/dates'
 
 interface InsightsScreenProps {
   go: (screen: string) => void
@@ -44,21 +47,12 @@ interface HistoryPoint {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-
-
 const COLOR_MOOD = 'oklch(0.78 0.08 150)'
 const COLOR_SLEEP = 'oklch(0.74 0.08 265)'
 const COLOR_PROTEIN = 'oklch(0.75 0.12 180)'
 const COLOR_SLEEP_WARN = 'oklch(0.76 0.09 30)'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getDateKey(row: Record<string, unknown>): string {
-  const raw = (row['created_at'] ?? row['logged_at'] ?? row['date']) as string | undefined
-  if (!raw) return ''
-  return new Date(raw).toISOString().split('T')[0] ?? ''
-}
 
 function abbrevWeek(weekStart: string): string {
   // weekStart is a YYYY-MM-DD date; render as e.g. "May 26"
@@ -67,16 +61,15 @@ function abbrevWeek(weekStart: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+// Empty 7-day scaffold (local-timezone keys, two-letter labels).
 function buildLast7(): DayData[] {
   const days: DayData[] = []
   for (let i = 6; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    d.setHours(0, 0, 0, 0)
-    const date = d.toISOString().split('T')[0] ?? ''
     days.push({
-      date,
-      label: DAY_LETTERS[d.getDay()] ?? '?',
+      date: localDateKey(d),
+      label: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][d.getDay()] ?? '?',
       calories: 0,
       protein: 0,
       carbs: 0,
@@ -104,12 +97,14 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
 
-  const goal = profile?.daily_calorie_goal ?? 2150
-  const proteinGoal = (goal * 0.25) / 4
-  const carbsGoal = (goal * 0.45) / 4
-  const fatGoal = (goal * 0.30) / 9
+  // Single source of truth — the same numbers Home, Nutrition, and Settings show.
+  const targets = macroTargets(profile)
+  const goal = targets.calories
+  const proteinGoal = targets.protein
+  const carbsGoal = targets.carbs
+  const fatGoal = targets.fat
 
-  const todayStr = new Date().toISOString().split('T')[0] ?? ''
+  const todayStr = localDateKey(new Date())
 
   // ── Data Fetching ──
   useEffect(() => {
@@ -117,30 +112,12 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
 
     async function load() {
       try {
-        const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-        sevenDaysAgo.setHours(0, 0, 0, 0)
-        const since = sevenDaysAgo.toISOString()
-
-        const [mealsRes, moodRes, sleepRes, reportRes, historyRes] = await Promise.allSettled([
-          supabase
-            .from('meals')
-            .select('total_calories, macros_json, created_at')
-            .eq('user_id', user!.id)
-            .gte('created_at', since),
-
-          supabase
-            .from('mood_checkins')
-            .select('mood, intensity, logged_at')
-            .eq('user_id', user!.id)
-            .gte('logged_at', since)
-            .order('logged_at', { ascending: true }),
-
-          supabase
-            .from('sleep_logs')
-            .select('duration_minutes, quality_score, date')
-            .eq('user_id', user!.id)
-            .gte('date', sevenDaysAgo.toISOString().split('T')[0] ?? ''),
+        // Day-level data comes from the ONE shared aggregation pipeline (local
+        // timezone, sleep on its morning-of date) — the same numbers Home and
+        // Nutrition show. The old inline version bucketed by UTC, which is why
+        // these charts read zeros while the rest of the app showed data.
+        const [agg, reportRes, historyRes] = await Promise.allSettled([
+          aggregateDays(user!.id, 7),
 
           supabase
             .from('clinical_reports')
@@ -157,58 +134,22 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
             .limit(8),
         ])
 
-        const base = buildLast7()
-        const dayMap = new Map(base.map((d) => [d.date, d]))
-
-        // Meals — sum calories and protein per day
-        if (mealsRes.status === 'fulfilled' && mealsRes.value.data) {
-          for (const row of mealsRes.value.data as Array<{
-            total_calories: number
-            macros_json: { protein: number; carbs?: number; fat?: number } | null
-            created_at: string
-          }>) {
-            const key = getDateKey(row as unknown as Record<string, unknown>)
-            const day = dayMap.get(key)
-            if (day) {
-              day.calories += row.total_calories ?? 0
-              day.protein += row.macros_json?.protein ?? 0
-              day.carbs += row.macros_json?.carbs ?? 0
-              day.fat += row.macros_json?.fat ?? 0
-            }
-          }
-        }
-
-        // Mood checkins — use last of day
-        if (moodRes.status === 'fulfilled' && moodRes.value.data) {
-          for (const row of moodRes.value.data as Array<{
-            mood: string
-            intensity: number | null
-            logged_at: string
-          }>) {
-            const key = getDateKey(row as unknown as Record<string, unknown>)
-            const day = dayMap.get(key)
-            if (day) {
-              day.mood = row.mood
-              day.moodHue = MOOD_HUES[row.mood] ?? null
-              day.moodIntensity = row.intensity ?? null
-            }
-          }
-        }
-
-        // Sleep logs
-        if (sleepRes.status === 'fulfilled' && sleepRes.value.data) {
-          for (const row of sleepRes.value.data as Array<{
-            duration_minutes: number | null
-            quality_score: number | null
-            date: string
-          }>) {
-            const key = getDateKey(row as unknown as Record<string, unknown>)
-            const day = dayMap.get(key)
-            if (day) {
-              day.sleepMinutes = row.duration_minutes ?? null
-              day.sleepQuality = row.quality_score ?? null
-            }
-          }
+        if (agg.status === 'fulfilled') {
+          setDays(
+            agg.value.map((d) => ({
+              date: d.date,
+              label: d.label,
+              calories: d.calories,
+              protein: d.protein,
+              carbs: d.carbs,
+              fat: d.fat,
+              mood: d.mood,
+              moodHue: d.mood ? MOOD_HUES[d.mood] ?? null : null,
+              moodIntensity: d.moodIntensity,
+              sleepMinutes: d.sleepMinutes,
+              sleepQuality: d.sleepQuality,
+            })),
+          )
         }
 
         // Clinical report
@@ -220,8 +161,6 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
         if (historyRes.status === 'fulfilled' && historyRes.value.data) {
           setHistory(historyRes.value.data as HistoryPoint[])
         }
-
-        setDays([...dayMap.values()])
       } catch (err) {
         console.warn('InsightsScreen load error:', err)
       } finally {
@@ -234,6 +173,12 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
 
   async function generateReport() {
     if (!user || generating) return
+    // Never send Sage an empty week — the old version generated reports
+    // claiming "0 days logged" while the home screen showed real meals.
+    if (!days.some((d) => d.calories > 0)) {
+      toast('Log a few meals first so Sage has something to analyze', { type: 'info' })
+      return
+    }
     setGenerating(true)
     setGenerateError(null)
 
@@ -362,11 +307,14 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
     ? sleepDays.reduce((s, d) => s + (d.sleepMinutes ?? 0), 0) / sleepDays.length
     : null
 
+  // Honest with small samples: no "consistency" claims from <3 nights.
   const sleepInsight = avgSleep === null
     ? 'Log sleep to see patterns and insights here.'
-    : avgSleep < 420
-      ? 'Aim for 7+ hours — it directly affects mood and food choices.'
-      : 'Good sleep consistency. Notice how it affects your energy levels.'
+    : sleepDays.length < 3
+      ? `${sleepDays.length} of 7 nights logged — ${3 - sleepDays.length} more and I can read your consistency.`
+      : avgSleep < 420
+        ? 'Aim for 7+ hours — it directly affects mood and food choices.'
+        : 'Good sleep consistency. Notice how it affects your energy levels.'
 
   // Mood × Calories correlation insight
   const goodMoodDays = days.filter((d) => d.mood === 'Radiant' || d.mood === 'Calm')
@@ -379,7 +327,8 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
     : null
 
   let moodFoodInsight = 'No clear pattern yet — keep logging for insights.'
-  if (goodMoodAvg !== null && badMoodAvg !== null) {
+  // A "pattern" needs at least 2 days on each side of the comparison.
+  if (goodMoodAvg !== null && badMoodAvg !== null && goodMoodDays.length >= 2 && badMoodDays.length >= 2) {
     if (goodMoodAvg > badMoodAvg + 200) {
       moodFoodInsight = 'You tend to eat more on good mood days.'
     } else if (badMoodAvg > goodMoodAvg + 200) {
@@ -445,12 +394,9 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
     >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <button
-          onClick={() => go('home')}
-          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}
-        >
-          <IconChevL size={20} />
-        </button>
+        <IconButton label="Back" onClick={() => go('back')} style={{ color: 'var(--text-muted)', marginLeft: -10 }}>
+          <IconChevL size={22} />
+        </IconButton>
         <h2
           style={{
             fontFamily: 'var(--serif)',
@@ -668,73 +614,97 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
         </p>
       ) : null}
 
-      {/* ── Section 2: Calorie Trend ── */}
+      {/* ── Section 2: Calorie Balance vs Goal ── */}
       <Card>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 14,
-          }}
-        >
-          <Eyebrow>Calories This Week</Eyebrow>
-          <span
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 12,
-              color: 'var(--accent)',
-            }}
-          >
-            avg {avgCalories} kcal
-          </span>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            height: 80,
-            gap: 6,
-          }}
-        >
-          {days.map((day) => {
-            const isToday = day.date === todayStr
-            const barH = Math.max(3, (day.calories / Math.max(maxCalBar, 3000)) * 80)
-            return (
-              <div
-                key={day.date}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 6,
-                  justifyContent: 'flex-end',
-                  height: '100%',
-                }}
-              >
-                <div
-                  style={{
-                    width: '100%',
-                    height: barH,
-                    background: isToday ? 'var(--accent)' : 'var(--surface-2)',
-                    borderRadius: 4,
-                    transition: 'height 0.5s cubic-bezier(0.22,1,0.36,1)',
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontFamily: 'var(--mono)',
-                    color: isToday ? 'var(--accent)' : 'var(--text-dim)',
-                  }}
-                >
-                  {day.label}
+        {(() => {
+          const loggedDays = days.filter((d) => d.calories > 0)
+          const avgBalance =
+            loggedDays.length > 0
+              ? Math.round(loggedDays.reduce((s, d) => s + (d.calories - goal), 0) / loggedDays.length)
+              : 0
+          const chartMax = Math.max(maxCalBar, goal * 1.15)
+          const H = 80
+          // Project a goal date from the average deficit (7700 kcal ≈ 1 kg),
+          // only when the user is actually losing toward a set goal.
+          let projection: string | null = null
+          if (
+            loggedDays.length >= 3 &&
+            avgBalance < -50 &&
+            profile?.goal_weight != null &&
+            profile?.weight != null &&
+            profile.goal_weight < profile.weight
+          ) {
+            const kgToGo = profile.weight - profile.goal_weight
+            const daysToGo = (kgToGo * 7700) / Math.abs(avgBalance)
+            if (daysToGo > 0 && daysToGo < 730) {
+              const eta = new Date()
+              eta.setDate(eta.getDate() + Math.round(daysToGo))
+              projection = `→ ~${profile.goal_weight} kg by ${eta.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+            }
+          }
+          return (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <Eyebrow>Calories vs Goal</Eyebrow>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)' }}>
+                  avg {avgCalories} kcal
                 </span>
               </div>
-            )
-          })}
-        </div>
+              <p style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 14, lineHeight: 1.4 }}>
+                {loggedDays.length === 0
+                  ? `Dashed line is your ${goal} kcal goal — log meals to fill this in.`
+                  : `${avgBalance <= 0 ? `Averaging ${Math.abs(avgBalance)} kcal under goal` : `Averaging ${avgBalance} kcal over goal`} on logged days ${projection ?? ''}`}
+              </p>
+              <div style={{ position: 'relative' }}>
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: 22 + (goal / chartMax) * H,
+                    borderTop: '1.5px dashed var(--accent)',
+                    opacity: 0.55,
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                  }}
+                />
+                <div style={{ display: 'flex', alignItems: 'flex-end', height: H + 22, gap: 6 }}>
+                  {days.map((day) => {
+                    const isToday = day.date === todayStr
+                    const over = day.calories > goal
+                    const barH = Math.max(3, (day.calories / chartMax) * H)
+                    return (
+                      <div
+                        key={day.date}
+                        style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, justifyContent: 'flex-end', height: '100%' }}
+                      >
+                        {day.calories > 0 && (
+                          <span style={{ fontFamily: 'var(--mono)', fontSize: 8.5, color: isToday ? 'var(--accent)' : 'var(--text-dim)' }}>
+                            {Math.round(day.calories / 100) / 10}k
+                          </span>
+                        )}
+                        <div
+                          style={{
+                            width: '100%',
+                            height: barH,
+                            background: day.calories === 0 ? 'var(--surface-2)' : over ? COLOR_SLEEP_WARN : isToday ? 'var(--accent)' : 'var(--accent-wash)',
+                            border: day.calories > 0 && !isToday && !over ? '1px solid var(--accent-line)' : 'none',
+                            borderRadius: 4,
+                            transition: 'height 0.5s cubic-bezier(0.22,1,0.36,1)',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                        <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: isToday ? 'var(--accent)' : 'var(--text-dim)' }}>
+                          {day.label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </>
+          )
+        })()}
       </Card>
 
       {/* ── Section 3: Mood × Calories ── */}
@@ -908,28 +878,54 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
         </p>
       </Card>
 
-      {/* ── Section 5: Weekly Macros ── */}
+      {/* ── Section 5: Weekly Macros — per-day bars so weekday/weekend variation shows ── */}
       <Card>
         <Eyebrow style={{ display: 'block', marginBottom: 16 }}>Weekly Macros</Eyebrow>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <MacroBar
-            label="Protein"
-            value={avgProtein}
-            goal={proteinGoal}
-            color={COLOR_PROTEIN}
-          />
-          <MacroBar
-            label="Carbs"
-            value={avgCarbs}
-            goal={carbsGoal}
-            color="oklch(0.72 0.14 85)"
-          />
-          <MacroBar
-            label="Fat"
-            value={avgFat}
-            goal={fatGoal}
-            color="oklch(0.70 0.12 55)"
-          />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {[
+            { label: 'Protein', key: 'protein' as const, goal: proteinGoal, avg: avgProtein, color: COLOR_PROTEIN },
+            { label: 'Carbs', key: 'carbs' as const, goal: carbsGoal, avg: avgCarbs, color: 'oklch(0.72 0.14 85)' },
+            { label: 'Fat', key: 'fat' as const, goal: fatGoal, avg: avgFat, color: 'oklch(0.70 0.12 55)' },
+          ].map((m) => {
+            const maxV = Math.max(...days.map((d) => d[m.key]), m.goal)
+            return (
+              <div key={m.label}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <Eyebrow>{m.label}</Eyebrow>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)' }}>
+                    avg {Math.round(m.avg)}<span style={{ fontSize: 9 }}>/{Math.round(m.goal)}g</span>
+                  </span>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      bottom: (m.goal / maxV) * 34,
+                      borderTop: `1px dashed ${m.color}`,
+                      opacity: 0.5,
+                      pointerEvents: 'none',
+                    }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 36 }}>
+                    {days.map((d) => (
+                      <div
+                        key={d.date}
+                        style={{
+                          flex: 1,
+                          height: Math.max(2, (d[m.key] / maxV) * 34),
+                          background: d.date === todayStr ? m.color : 'var(--surface-2)',
+                          borderRadius: 3,
+                          transition: 'height 0.5s ease',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
         <p
           style={{
@@ -940,7 +936,7 @@ export function InsightsScreen({ go }: InsightsScreenProps) {
             fontFamily: 'var(--sans)',
           }}
         >
-          Daily averages over the past 7 days vs. your personal targets.
+          Per-day intake over the past 7 days — dashed lines are your personal targets.
         </p>
       </Card>
     </div>

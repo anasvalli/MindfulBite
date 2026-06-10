@@ -1,21 +1,5 @@
 import { supabase } from './supabase'
-
-// ─── Local date helpers ─────────────────────────────────────────────────────
-// Convert a Date to a local YYYY-MM-DD string (NOT UTC — uses the device tz).
-function localDateKey(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-// Subtract n days from a date key, returning a new local date key.
-function shiftKey(key: string, deltaDays: number): string {
-  const [y, m, d] = key.split('-').map(Number)
-  const dt = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1)
-  dt.setDate(dt.getDate() + deltaDays)
-  return localDateKey(dt)
-}
+import { localDateKey, shiftKey } from './dates'
 
 export interface StreakResult {
   current: number

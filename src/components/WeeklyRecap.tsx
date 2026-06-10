@@ -139,10 +139,93 @@ export function WeeklyRecap({ userId, onClose }: { userId: string; onClose: () =
     return 'A fresh week is waiting. Let’s make the next one count. 🌱'
   }
 
+  // Render the recap to a branded share-card image (people share images, not
+  // walls of emoji text). Falls back to text share / clipboard.
+  function renderShareCard(d: RecapData): Promise<File | null> {
+    return new Promise((resolve) => {
+      try {
+        const W = 720
+        const H = 900
+        const canvas = document.createElement('canvas')
+        canvas.width = W
+        canvas.height = H
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return resolve(null)
+
+        const css = getComputedStyle(document.documentElement)
+        const bg = css.getPropertyValue('--surface').trim() || '#1f1b16'
+        const text = css.getPropertyValue('--text').trim() || '#f4efe7'
+        const dim = css.getPropertyValue('--text-muted').trim() || '#a99e8e'
+        const accent = css.getPropertyValue('--accent').trim() || '#d9b36a'
+
+        ctx.fillStyle = bg
+        ctx.fillRect(0, 0, W, H)
+        // soft accent glow
+        const grad = ctx.createRadialGradient(W - 80, 60, 10, W - 80, 60, 420)
+        grad.addColorStop(0, 'rgba(217,179,106,0.22)')
+        grad.addColorStop(1, 'rgba(217,179,106,0)')
+        ctx.fillStyle = grad
+        ctx.fillRect(0, 0, W, H)
+
+        ctx.fillStyle = accent
+        ctx.font = '600 30px Hanken Grotesk, sans-serif'
+        ctx.fillText('🌿 Mindful Bite', 56, 96)
+
+        ctx.fillStyle = text
+        ctx.font = '600 72px Georgia, serif'
+        ctx.fillText('My Week', 56, 220)
+        ctx.fillText('in Review', 56, 300)
+
+        ctx.fillStyle = dim
+        ctx.font = '26px monospace'
+        ctx.fillText(rangeLabel, 56, 352)
+
+        const stats: Array<[string, string]> = [
+          ['MEALS LOGGED', `${d.totalMeals}`],
+          ['AVG CALORIES', `${d.avgCalories.toLocaleString()} kcal/day`],
+          ['DAYS TRACKED', `${d.daysLogged} of 7`],
+          ['AVG SLEEP', d.avgSleepHours != null ? `${d.avgSleepHours}h` : '—'],
+        ]
+        stats.forEach(([label, value], i) => {
+          const y = 450 + i * 96
+          ctx.fillStyle = dim
+          ctx.font = '600 20px Hanken Grotesk, sans-serif'
+          ctx.fillText(label, 56, y)
+          ctx.fillStyle = accent
+          ctx.font = '600 46px Georgia, serif'
+          ctx.fillText(value, 56, y + 48)
+        })
+
+        if (d.dominantMood) {
+          ctx.fillStyle = text
+          ctx.font = '30px Hanken Grotesk, sans-serif'
+          ctx.fillText(`${MOOD_EMOJIS[d.dominantMood] ?? '✨'} Mostly ${d.dominantMood}`, 56, 858)
+        }
+
+        canvas.toBlob((blob) => {
+          if (!blob) return resolve(null)
+          resolve(new File([blob], 'mindfulbite-week.png', { type: 'image/png' }))
+        }, 'image/png')
+      } catch {
+        resolve(null)
+      }
+    })
+  }
+
   async function handleShare() {
     if (!data) return
     const text = buildSummaryText(data)
     if (typeof navigator !== 'undefined' && navigator.share) {
+      // Prefer the branded image card when file-sharing is supported.
+      const file = await renderShareCard(data)
+      if (file && navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ title: 'My Week in Review', files: [file], text })
+          return
+        } catch {
+          // cancelled or unsupported — fall through
+        }
+      }
       try {
         await navigator.share({ title: 'My Week in Review', text })
         return

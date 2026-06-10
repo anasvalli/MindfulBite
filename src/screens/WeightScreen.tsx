@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Card, Eyebrow, Spinner } from '../components/ui'
+import { Card, Eyebrow, Spinner, IconButton, toast, haptic } from '../components/ui'
 import { IconChevL } from '../components/icons'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { localDateKey } from '../lib/dates'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,12 +20,7 @@ interface WeightScreenProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toYMD(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
+const toYMD = localDateKey
 
 function shortDate(ymd: string): string {
   const [, m, d] = ymd.split('-').map(Number)
@@ -176,17 +172,21 @@ export function WeightScreen({ go }: WeightScreenProps) {
     const val = parseFloat(input)
     if (!isFinite(val) || val <= 0) return
     setSaving(true)
+    haptic()
     const today = toYMD(new Date())
 
     const upsertRes = await supabase
       .from('weight_logs')
       .upsert({ user_id: user.id, date: today, weight_kg: val }, { onConflict: 'user_id,date' })
 
-    if (!upsertRes.error) {
+    if (upsertRes.error) {
+      toast("Couldn't save — you're offline", { type: 'error' })
+    } else {
       // Keep users.weight in sync with latest entry
       await supabase.from('users').update({ weight: val }).eq('id', user.id)
       setInput('')
       await load()
+      toast(`Weight logged — ${val} kg`)
       try {
         await refreshProfile()
       } catch {
@@ -219,20 +219,9 @@ export function WeightScreen({ go }: WeightScreenProps) {
     >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-        <button
-          onClick={() => go('settings')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <IconChevL size={20} />
-        </button>
+        <IconButton label="Back" onClick={() => go('back')} style={{ color: 'var(--text-muted)', marginLeft: -10 }}>
+          <IconChevL size={22} />
+        </IconButton>
         <h1
           style={{
             position: 'absolute',

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Ring, Card, Eyebrow, Spinner } from '../components/ui'
+import { Ring, Card, Eyebrow, Spinner, IconButton, toast, haptic } from '../components/ui'
 import { IconMoon, IconChevL, IconClose } from '../components/icons'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { localDateKey, dayLabel2 } from '../lib/dates'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,9 +56,9 @@ const QUALITY_OPTION_LABELS: Record<number, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toYMD(d: Date): string {
-  return d.toISOString().split('T')[0]
-}
+// Local-timezone day key (the old toISOString() version bucketed by UTC, which
+// shifted sleep onto the wrong weekday for anyone east of Greenwich).
+const toYMD = localDateKey
 
 function formatDuration(minutes: number | null): string {
   if (minutes == null || minutes <= 0) return '—'
@@ -110,18 +111,14 @@ function getWeekDayData(logs: SleepLog[]): { label: string; minutes: number; isT
   const today = new Date()
   // Build a map of date → log
   const logMap = new Map(logs.map((l) => [l.date, l]))
-  const DAY_CHARS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today)
     d.setDate(today.getDate() - i)
     const ymd = toYMD(d)
     const log = logMap.get(ymd)
-    const dayIndex = d.getDay() // 0=Sun
-    // Convert: Sun=0 → 6, Mon=1 → 0, …
-    const charIdx = dayIndex === 0 ? 6 : dayIndex - 1
     days.push({
-      label: DAY_CHARS[charIdx],
+      label: dayLabel2(ymd),
       minutes: log?.duration_minutes ?? 0,
       isToday: i === 0,
     })
@@ -132,6 +129,12 @@ function getWeekDayData(logs: SleepLog[]): { label: string; minutes: number; isT
 function coachTip(logs: SleepLog[]): string {
   if (logs.length === 0) {
     return 'Log your first night of sleep to start seeing personalised insights.'
+  }
+  // Never claim a "trend" from fewer than 3 nights — be honest about the
+  // sample size and turn it into a logging incentive instead.
+  if (logs.length < 3) {
+    const remaining = 3 - logs.length
+    return `${logs.length} of 7 nights logged — ${remaining} more and I can read your consistency.`
   }
   const withDuration = logs.filter((l) => l.duration_minutes != null)
   const withQuality = logs.filter((l) => l.quality_score != null)
@@ -259,8 +262,11 @@ export function SleepScreen({ go }: SleepScreenProps) {
       )
 
       if (upsertErr) {
-        setSaveError(upsertErr.message)
+        setSaveError("Couldn't save — check your connection and try again.")
+        toast("Couldn't save — you're offline", { type: 'error' })
       } else {
+        haptic()
+        toast(`Sleep logged — ${formatDuration(durationMins)}`)
         await fetchLogs()
         setShowLog(false)
         // Reset form
@@ -300,20 +306,9 @@ export function SleepScreen({ go }: SleepScreenProps) {
       <div className="mb-screen" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-          <button
-            onClick={() => go('home')}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              padding: 4,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <IconChevL size={20} />
-          </button>
+          <IconButton label="Back" onClick={() => go('back')} style={{ color: 'var(--text-muted)', marginLeft: -10 }}>
+            <IconChevL size={22} />
+          </IconButton>
 
           <div
             style={{
@@ -341,21 +336,9 @@ export function SleepScreen({ go }: SleepScreenProps) {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowLog(true)}
-            style={{
-              marginLeft: 'auto',
-              background: 'none',
-              border: 'none',
-              color: SLEEP_COLOR,
-              cursor: 'pointer',
-              padding: 4,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
+          <IconButton label="Log sleep" onClick={() => setShowLog(true)} style={{ marginLeft: 'auto', marginRight: -10, color: SLEEP_COLOR }}>
             <IconMoon size={20} />
-          </button>
+          </IconButton>
         </div>
 
         {/* Table error */}
@@ -475,7 +458,8 @@ export function SleepScreen({ go }: SleepScreenProps) {
                       color: 'var(--on-accent)',
                       border: 'none',
                       borderRadius: 14,
-                      padding: '10px 24px',
+                      padding: '13px 24px',
+                      minHeight: 44,
                       fontFamily: 'var(--sans)',
                       fontWeight: 700,
                       fontSize: 13,
@@ -507,9 +491,10 @@ export function SleepScreen({ go }: SleepScreenProps) {
                   )}
                 </div>
 
-                {/* Bars */}
+                {/* Bars with the 7–9h healthy-range band behind them */}
                 <div
                   style={{
+                    position: 'relative',
                     display: 'flex',
                     alignItems: 'flex-end',
                     gap: 4,
@@ -517,20 +502,41 @@ export function SleepScreen({ go }: SleepScreenProps) {
                     marginBottom: 8,
                   }}
                 >
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      bottom: (420 / maxBar) * barH,
+                      height: ((540 - 420) / maxBar) * barH,
+                      background: SLEEP_COLOR_WASH,
+                      borderTop: `1px dashed ${SLEEP_COLOR}`,
+                      borderBottom: `1px dashed ${SLEEP_COLOR}`,
+                      opacity: 0.6,
+                      pointerEvents: 'none',
+                      borderRadius: 2,
+                    }}
+                  />
                   {weekDays.map((day, i) => {
                     const heightPct = Math.min(day.minutes / maxBar, 1)
                     const barHeight = Math.max(day.minutes > 0 ? 6 : 2, heightPct * barH)
                     return (
-                      <div
-                        key={i}
-                        style={{
-                          flex: 1,
-                          height: barHeight,
-                          background: day.isToday ? SLEEP_COLOR : 'var(--surface-2)',
-                          borderRadius: '4px 4px 0 0',
-                          transition: 'height 0.5s ease',
-                        }}
-                      />
+                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%', gap: 3 }}>
+                        {day.minutes > 0 && (
+                          <span style={{ fontFamily: 'var(--mono)', fontSize: 8.5, color: day.isToday ? SLEEP_COLOR : 'var(--text-dim)' }}>
+                            {(day.minutes / 60).toFixed(day.minutes % 60 === 0 ? 0 : 1)}h
+                          </span>
+                        )}
+                        <div
+                          style={{
+                            width: '100%',
+                            height: barHeight,
+                            background: day.isToday ? SLEEP_COLOR : 'var(--surface-2)',
+                            borderRadius: '4px 4px 0 0',
+                            transition: 'height 0.5s ease',
+                          }}
+                        />
+                      </div>
                     )
                   })}
                 </div>
@@ -643,21 +649,9 @@ export function SleepScreen({ go }: SleepScreenProps) {
               >
                 Log Your Sleep
               </div>
-              <button
-                onClick={() => setShowLog(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  padding: 4,
-                  display: 'flex',
-                  alignItems: 'center',
-                  marginTop: 2,
-                }}
-              >
+              <IconButton label="Close" onClick={() => setShowLog(false)} style={{ color: 'var(--text-muted)', marginTop: -8, marginRight: -8 }}>
                 <IconClose size={20} />
-              </button>
+              </IconButton>
             </div>
 
             {/* Date picker */}

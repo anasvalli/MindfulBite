@@ -72,7 +72,11 @@ function PasswordInput({ value, onChange, placeholder, show, onToggle, name }: P
 
 export function AuthScreen({ go }: AuthScreenProps) {
   const { signIn, signUp } = useAuth()
-  const [tab, setTab] = useState<'signin' | 'signup'>('signin')
+  // First-time visitors land on Sign Up (the product sells itself faster than
+  // a login wall); anyone who has signed in on this device before gets Sign In.
+  const [tab, setTab] = useState<'signin' | 'signup'>(() =>
+    localStorage.getItem('hasSignedInBefore') ? 'signin' : 'signup',
+  )
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -100,6 +104,7 @@ export function AuthScreen({ go }: AuthScreenProps) {
       if (result.error) {
         setError(result.error.message)
       } else {
+        localStorage.setItem('hasSignedInBefore', '1')
         go('home')
       }
     } finally {
@@ -242,6 +247,20 @@ export function AuthScreen({ go }: AuthScreenProps) {
             <p style={{ color: 'var(--text-muted)', fontSize: 14, fontFamily: 'var(--sans)' }}>
               Your intelligent wellness companion
             </p>
+          </div>
+
+          {/* Value strip — show what the product does before asking for credentials */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+            {[
+              ['📸', 'Snap meals → instant calories & macros'],
+              ['🌿', 'Sage — your AI nutritionist & coach'],
+              ['😴', 'Sleep & mood patterns, decoded'],
+            ].map(([icon, line]) => (
+              <div key={line} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 16, width: 22, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
+                <span style={{ fontFamily: 'var(--sans)', fontSize: 13, color: 'var(--text-muted)' }}>{line}</span>
+              </div>
+            ))}
           </div>
 
           {/* Card */}

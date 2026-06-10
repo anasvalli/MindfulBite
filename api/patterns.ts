@@ -317,6 +317,20 @@ export default async function handler(req: Request): Promise<Response> {
     `[patterns] Done — ${successCount} ok, ${errorCount} errors out of ${userIds.length} users processed at ${startedAt}`
   )
 
+  // Morning-brief push rides this nightly cron (02:00 UTC ≈ 7:00 AM Pakistan)
+  // since both Hobby-plan cron slots are taken. Fire-and-forget; never blocks
+  // or fails the pattern run.
+  if (isVercelCron && process.env.CRON_SECRET) {
+    try {
+      await fetch('https://mindfulbite-rho.vercel.app/api/push-send', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+      }).catch(() => {})
+    } catch {
+      /* non-blocking */
+    }
+  }
+
   return new Response(
     JSON.stringify({
       processed: userIds.length,

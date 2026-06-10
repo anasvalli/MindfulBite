@@ -235,3 +235,15 @@ input[type='range']::-moz-range-thumb {
 .mb-press:active {
   transform: scale(0.96);
 }
+
+/* Animation: toast slide-up */
+@keyframes mb-toast-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

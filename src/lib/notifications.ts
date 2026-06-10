@@ -1,4 +1,5 @@
 import { parseTime12h } from './time'
+import { supabase } from './supabase'
 
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!('Notification' in window)) return false
@@ -44,12 +45,17 @@ export function scheduleMealReminders(plan: PlanMeal[]): void {
 // Richer reminders engine
 // ---------------------------------------------------------------------------
 
-export interface ReminderPrefs { meals: boolean; water: boolean; windDown: boolean }
+export interface ReminderPrefs {
+  meals: boolean
+  water: boolean
+  windDown: boolean
+  morningBrief?: boolean
+}
 
 const REMINDER_PREFS_KEY = 'reminderPrefs'
 
 export function getReminderPrefs(): ReminderPrefs {
-  const fallback: ReminderPrefs = { meals: false, water: false, windDown: false }
+  const fallback: ReminderPrefs = { meals: false, water: false, windDown: false, morningBrief: false }
   try {
     const raw = localStorage.getItem(REMINDER_PREFS_KEY)
     if (!raw) return fallback
@@ -58,17 +64,93 @@ export function getReminderPrefs(): ReminderPrefs {
       meals: !!parsed?.meals,
       water: !!parsed?.water,
       windDown: !!parsed?.windDown,
+      morningBrief: !!parsed?.morningBrief,
     }
   } catch {
     return fallback
   }
 }
 
-export function setReminderPrefs(prefs: ReminderPrefs): void {
+// localStorage is the synchronous cache; users.reminder_prefs (jsonb) is the
+// durable copy so prefs survive reinstalls and drive server-side push.
+export function setReminderPrefs(prefs: ReminderPrefs, userId?: string): void {
   try {
     localStorage.setItem(REMINDER_PREFS_KEY, JSON.stringify(prefs))
   } catch {
     /* ignore storage failures */
+  }
+  if (userId) {
+    supabase
+      .from('users')
+      .update({ reminder_prefs: prefs })
+      .eq('id', userId)
+      .then(() => {}, () => {})
+  }
+}
+
+// Pull the durable copy into the local cache (call once after sign-in).
+export async function syncReminderPrefs(userId: string): Promise<ReminderPrefs> {
+  try {
+    const { data } = await supabase.from('users').select('reminder_prefs').eq('id', userId).single()
+    const remote = (data as { reminder_prefs?: ReminderPrefs | null } | null)?.reminder_prefs
+    if (remote && typeof remote === 'object') {
+      localStorage.setItem(REMINDER_PREFS_KEY, JSON.stringify(remote))
+      return getReminderPrefs()
+    }
+  } catch {
+    /* offline — keep cache */
+  }
+  return getReminderPrefs()
+}
+
+// ─── Web Push ────────────────────────────────────────────────────────────────
+// True background notifications via the PWA service worker — the setTimeout
+// reminders above only fire while a tab is open.
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  const output = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) output[i] = rawData.charCodeAt(i)
+  return output
+}
+
+export async function subscribePush(userId: string): Promise<boolean> {
+  try {
+    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
+    if (!vapidKey || !('serviceWorker' in navigator) || !('PushManager' in window)) return false
+    if (Notification.permission !== 'granted') return false
+    const reg = await navigator.serviceWorker.ready
+    const sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      }))
+    const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } }
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return false
+    const { error } = await supabase.from('push_subscriptions').upsert(
+      { user_id: userId, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth },
+      { onConflict: 'endpoint' },
+    )
+    return !error
+  } catch {
+    return false
+  }
+}
+
+export async function unsubscribePush(userId: string): Promise<void> {
+  try {
+    if (!('serviceWorker' in navigator)) return
+    const reg = await navigator.serviceWorker.ready
+    const sub = await reg.pushManager.getSubscription()
+    if (!sub) return
+    const endpoint = sub.endpoint
+    await sub.unsubscribe()
+    await supabase.from('push_subscriptions').delete().eq('user_id', userId).eq('endpoint', endpoint)
+  } catch {
+    /* best effort */
   }
 }
 
@@ -153,5 +235,32 @@ export function scheduleAllReminders(opts: {
       '🌙 Wind-down time',
       "a calm evening helps tomorrow's energy",
     )
+  }
+}
+
+// ─── Contextual permission ask ───────────────────────────────────────────────
+// Ask for notification permission at a meaningful moment (right after the
+// user's first successful meal log) instead of a buried Settings toggle.
+// Asks at most once; safe to call repeatedly.
+const PERM_ASKED_KEY = 'notifPermAsked'
+
+export async function maybeAskNotificationPermission(userId?: string): Promise<boolean> {
+  try {
+    if (typeof Notification === 'undefined') return false
+    if (Notification.permission === 'granted') {
+      if (userId) void subscribePush(userId)
+      return true
+    }
+    if (Notification.permission === 'denied') return false
+    if (localStorage.getItem(PERM_ASKED_KEY)) return false
+    localStorage.setItem(PERM_ASKED_KEY, '1')
+    const result = await Notification.requestPermission()
+    const granted = result === 'granted'
+    // Permission granted in a meaningful moment → also register for real
+    // background push so reminders work with the app closed.
+    if (granted && userId) void subscribePush(userId)
+    return granted
+  } catch {
+    return false
   }
 }

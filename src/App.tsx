@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from './contexts/AuthContext'
 import { useLanguage } from './contexts/LanguageContext'
 import { AuthScreen } from './screens/AuthScreen'
@@ -19,7 +19,7 @@ import { WaterScreen } from './screens/WaterScreen'
 import { WeightScreen } from './screens/WeightScreen'
 import { CycleScreen } from './screens/CycleScreen'
 import { InstallPrompt } from './components/InstallPrompt'
-import { Spinner } from './components/ui'
+import { Spinner, Toaster } from './components/ui'
 import { IconHome, IconFlame, IconMoon, IconCamera, IconMood } from './components/icons'
 
 type Screen =
@@ -118,7 +118,12 @@ function TabBar({ screen, go }: TabBarProps) {
         bottom: 0,
         left: 0,
         right: 0,
-        background: 'linear-gradient(to top, var(--bg) 60%, transparent)',
+        // Blur material so content never visually collides with the icons —
+        // a plain gradient left the top 40% transparent and charts bled through.
+        background: 'color-mix(in oklab, var(--bg) 86%, transparent)',
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+        borderTop: '1px solid var(--line)',
         display: 'flex',
         alignItems: 'center',
         // Respect the device's bottom gesture bar / home indicator
@@ -134,6 +139,7 @@ function TabBar({ screen, go }: TabBarProps) {
           return (
             <button
               key={tab.id}
+              aria-label="Log a meal"
               onClick={() => go('capture')}
               style={{
                 flex: 1,
@@ -169,6 +175,7 @@ function TabBar({ screen, go }: TabBarProps) {
         return (
           <button
             key={tab.id}
+            aria-label={tab.label}
             onClick={() => go(tab.id as Screen)}
             style={{
               flex: 1,
@@ -207,9 +214,23 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [screenKey, setScreenKey] = useState(0)
   const { fullScreen, scale, columned } = useDeviceMode()
+  // One-deep-or-more nav history so go('back') returns to where the user
+  // actually came from (Home's quick-track → Water → back must land on Home,
+  // not a hardcoded screen).
+  const stackRef = useRef<Screen[]>([])
 
   const go = useCallback((s: string) => {
-    setScreen(s as Screen)
+    if (s === 'back') {
+      setScreen((current) => {
+        void current
+        return stackRef.current.pop() ?? 'home'
+      })
+    } else {
+      setScreen((current) => {
+        if (current !== s) stackRef.current = [...stackRef.current.slice(-7), current]
+        return s as Screen
+      })
+    }
     setScreenKey((k) => k + 1)
   }, [])
 
@@ -223,6 +244,15 @@ export default function App() {
       setScreen('home')
     }
   }, [loading, session])
+
+  // If boot takes >8s (offline cold start), swap the spinner for a branded
+  // offline state with a retry instead of spinning forever.
+  const [bootStalled, setBootStalled] = useState(false)
+  useEffect(() => {
+    if (!loading) return
+    const t = window.setTimeout(() => setBootStalled(true), 8000)
+    return () => window.clearTimeout(t)
+  }, [loading])
 
   const isOnboarding = !!session && !!profile && !profile.onboarding_complete
   const showTabBar = !IMMERSIVE.includes(screen) && !!session && !isOnboarding
@@ -331,9 +361,38 @@ export default function App() {
               background: 'var(--bg)',
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 24, textAlign: 'center' }}>
               <div style={{ fontSize: 32 }}>🌿</div>
-              <Spinner size={40} />
+              {bootStalled ? (
+                <>
+                  <span style={{ fontFamily: 'var(--sans)', fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>
+                    Having trouble connecting
+                  </span>
+                  <span style={{ fontFamily: 'var(--sans)', fontSize: 13, color: 'var(--text-muted)', maxWidth: 260 }}>
+                    Check your internet connection and try again.
+                  </span>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="mb-press"
+                    style={{
+                      marginTop: 4,
+                      background: 'var(--accent)',
+                      color: 'var(--on-accent)',
+                      border: 'none',
+                      borderRadius: 14,
+                      padding: '12px 28px',
+                      fontFamily: 'var(--sans)',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Retry
+                  </button>
+                </>
+              ) : (
+                <Spinner size={40} />
+              )}
             </div>
           </div>
         ) : (
@@ -353,6 +412,9 @@ export default function App() {
 
             {/* Tab bar */}
             {showTabBar && <TabBar screen={screen} go={go} />}
+
+            {/* Global toasts (log confirmations, undo, offline errors) */}
+            <Toaster />
           </>
         )}
       </div>

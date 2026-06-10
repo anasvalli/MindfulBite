@@ -3,8 +3,13 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { analyzeFoodImage, searchFood } from '../lib/foodAI'
 import type { FoodItem } from '../types'
-import { Card, Spinner, Eyebrow, glassBtn } from '../components/ui'
+import { Card, Spinner, Eyebrow, glassBtn, haptic } from '../components/ui'
 import { IconClose, IconRetake, IconCheck, IconChevL, IconSearch } from '../components/icons'
+import { MOODS } from '../lib/moods'
+import { computeStreak } from '../lib/streaks'
+import { aggregateDays } from '../lib/aggregate'
+import { macroTargets } from '../lib/targets'
+import { maybeAskNotificationPermission } from '../lib/notifications'
 
 interface CaptureScreenProps {
   go: (screen: string) => void
@@ -92,14 +97,12 @@ function generateMoodObservation(items: FoodItem[], calories: number): string {
   }
 }
 
-const POST_MOODS = [
-  { key: 'Happy', emoji: '😊', hue: 85 },
-  { key: 'Energetic', emoji: '⚡', hue: 60 },
-  { key: 'Normal', emoji: '😐', hue: 200 },
-  { key: 'Tired', emoji: '😴', hue: 250 },
-  { key: 'Stressed', emoji: '😤', hue: 30 },
-  { key: 'Sad', emoji: '😞', hue: 260 },
-]
+// Same vocabulary as the Mood tab (lib/moods.ts) so post-meal moods and daily
+// check-ins join into one dataset Sage can correlate — the old list (Happy/
+// Energetic/Normal/Stressed/Sad) couldn't be compared with Radiant/Calm/Tense.
+const POST_MOODS = MOODS
+
+const SKIP_MOOD_KEY = 'skipPostMealMood'
 
 export function CaptureScreen({ go }: CaptureScreenProps) {
   const { user, profile } = useAuth()
@@ -118,6 +121,21 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
   const [savedMealCalories, setSavedMealCalories] = useState<number>(0)
   const [selectedPostMood, setSelectedPostMood] = useState<string | null>(null)
   const [savingMood, setSavingMood] = useState(false)
+  // Post-save context for the success screen: running total, yesterday delta,
+  // streak celebration.
+  const [postStats, setPostStats] = useState<{
+    todayTotal: number
+    yesterdayTotal: number | null
+    streak: number
+    firstOfDay: boolean
+  } | null>(null)
+  const [skipMoodAsk, setSkipMoodAsk] = useState(() => localStorage.getItem(SKIP_MOOD_KEY) === '1')
+  const [showMoodChips, setShowMoodChips] = useState(true)
+
+  // Recent + frequent foods for instant re-logging on the manual screen.
+  const [recentFoods, setRecentFoods] = useState<FoodItem[]>([])
+  const [frequentFoods, setFrequentFoods] = useState<FoodItem[]>([])
+  const [historyLoaded, setHistoryLoaded] = useState(false)
 
   // Manual search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -476,7 +494,27 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
       setSavedMealName(mealName)
       setSavedMealCalories(totalCalories)
       setSelectedPostMood(null)
+      setShowMoodChips(!skipMoodAsk)
       setStep('mood-check')
+      haptic()
+
+      // Success-screen context (non-blocking): updated daily total, yesterday
+      // delta, streak — and the contextual notification ask on the first log.
+      try {
+        const [agg, s] = await Promise.all([aggregateDays(user.id, 2), computeStreak(user.id)])
+        const today = agg[agg.length - 1]
+        const yest = agg.length >= 2 ? agg[agg.length - 2] : null
+        const firstOfDay = (today?.mealCount ?? 1) === 1
+        setPostStats({
+          todayTotal: today?.calories ?? totalCalories,
+          yesterdayTotal: yest && yest.calories > 0 ? yest.calories : null,
+          streak: s.current,
+          firstOfDay,
+        })
+        if (firstOfDay) maybeAskNotificationPermission()
+      } catch {
+        setPostStats(null)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save meal')
     } finally {
@@ -484,21 +522,29 @@ export function CaptureScreen({ go }: CaptureScreenProps) {
     }
   }
 
-  async function handleFinishLogging() {
-    if (!user || !savedMealId || !selectedPostMood) return
+  // Mood is optional: with a mood we hand off to Sage's mood chat; without,
+  // logging is already complete and Done just goes home.
+  async function handleFinishLogging(mood?: string | null) {
+    if (!user || !savedMealId) return
+    // Explicit null = "Done without a mood" (even if a chip was tapped earlier).
+    const chosen = mood === null ? null : mood ?? selectedPostMood
+    if (!chosen) {
+      go('home')
+      return
+    }
     setSavingMood(true)
     try {
       await supabase.from('meal_moods').insert({
         meal_id: savedMealId,
         user_id: user.id,
-        mood: selectedPostMood,
+        mood: chosen,
         context_notes: savedMealName,
       })
 
       localStorage.setItem('mealMoodContext', JSON.stringify({
         mealName: savedMealName,
         calories: savedMealCalories,
-        mood: selectedPostMood,
+        mood: chosen,
         protein: items.reduce((s, i) => s + i.protein, 0),
         carbs: items.reduce((s, i) => s + i.carbs, 0),
         fat: items.reduce((s, i) => s + i.fat, 0),
@@ -592,6 +638,53 @@ Accurate nutritional estimates for typical local portion sizes.`,
     setEditingId(null)
     setStep('result')
   }
+
+  // One tap from a Recent/Frequent chip → pre-filled review, no search round-trip.
+  function quickAddFood(it: FoodItem) {
+    haptic()
+    setItems([{ ...it, id: `qa-${Math.random().toString(36).slice(2)}` }])
+    setPreviewUrl(null)
+    setBase64(null)
+    setEditingId(null)
+    setStep('result')
+  }
+
+  // Load the user's own meal history once when the manual screen opens —
+  // repeat meals (the 3-5×/day case) become a 2-tap log instead of ~8.
+  useEffect(() => {
+    if (step !== 'manual' || !user || historyLoaded) return
+    setHistoryLoaded(true)
+    ;(async () => {
+      try {
+        const since = new Date(Date.now() - 60 * 86400000).toISOString()
+        const { data } = await supabase
+          .from('meals')
+          .select('items_json, created_at')
+          .eq('user_id', user.id)
+          .gte('created_at', since)
+          .order('created_at', { ascending: false })
+          .limit(120)
+        if (!data) return
+        const byName = new Map<string, { item: FoodItem; count: number; firstSeen: number }>()
+        ;(data as Array<{ items_json: FoodItem[] | null }>).forEach((row, idx) => {
+          for (const it of row.items_json ?? []) {
+            const k = (it.name ?? '').trim().toLowerCase()
+            if (!k) continue
+            const e = byName.get(k)
+            if (e) e.count++
+            else byName.set(k, { item: it, count: 1, firstSeen: idx })
+          }
+        })
+        const entries = [...byName.values()]
+        setFrequentFoods(
+          entries.filter((e) => e.count > 1).sort((a, b) => b.count - a.count).slice(0, 8).map((e) => e.item),
+        )
+        setRecentFoods(entries.sort((a, b) => a.firstSeen - b.firstSeen).slice(0, 8).map((e) => e.item))
+      } catch {
+        // non-blocking — search still works
+      }
+    })()
+  }, [step, user, historyLoaded])
 
   // Edit helpers
   function startEdit(item: FoodItem) {
@@ -1075,6 +1168,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
             }}
           >
             <button
+              aria-label="Back"
               onClick={() => setStep('upload')}
               style={{
                 ...glassBtn,
@@ -1082,7 +1176,8 @@ Accurate nutritional estimates for typical local portion sizes.`,
                 border: '1px solid var(--line)',
                 borderRadius: 14,
                 color: 'var(--text-muted)',
-                padding: '8px 14px',
+                padding: '12px 14px',
+                minHeight: 44,
                 flexShrink: 0,
                 backdropFilter: 'none',
               }}
@@ -1147,6 +1242,74 @@ Accurate nutritional estimates for typical local portion sizes.`,
 
           {/* Results area */}
           <div style={{ flex: 1, padding: '16px 20px 0', overflow: 'auto' }}>
+
+            {/* Recent + Frequent — instant, from the user's own history */}
+            {(frequentFoods.length > 0 || recentFoods.length > 0) && searchResults.length === 0 && (
+              <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {frequentFoods.length > 0 && (
+                  <div>
+                    <Eyebrow style={{ display: 'block', marginBottom: 8 }}>Frequent</Eyebrow>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {frequentFoods.map((f, i) => (
+                        <button
+                          key={`fq-${i}`}
+                          onClick={() => quickAddFood(f)}
+                          className="mb-press"
+                          style={{
+                            background: 'var(--surface)',
+                            border: '1px solid var(--accent-line)',
+                            borderRadius: 999,
+                            padding: '8px 14px',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--sans)',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: 'var(--text)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
+                        >
+                          {f.name}
+                          <span style={{ color: 'var(--accent)', fontFamily: 'var(--mono)', fontSize: 11 }}>{Math.round(f.calories)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {recentFoods.length > 0 && (
+                  <div>
+                    <Eyebrow style={{ display: 'block', marginBottom: 8 }}>Recent</Eyebrow>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {recentFoods.map((f, i) => (
+                        <button
+                          key={`rc-${i}`}
+                          onClick={() => quickAddFood(f)}
+                          className="mb-press"
+                          style={{
+                            background: 'var(--surface)',
+                            border: '1px solid var(--line)',
+                            borderRadius: 999,
+                            padding: '8px 14px',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--sans)',
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: 'var(--text-muted)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
+                        >
+                          {f.name}
+                          <span style={{ color: 'var(--text-dim)', fontFamily: 'var(--mono)', fontSize: 11 }}>{Math.round(f.calories)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Local foods section — shown above search results */}
             {!localLoaded ? (
@@ -1956,7 +2119,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
                     ))}
                   </div>
                 ) : (
-                  <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text)' }}>{swapText}</p>
+                  <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text)' }}>{swapText?.replace(/\*\*?/g, '')}</p>
                 )}
               </div>
             )}
@@ -2042,7 +2205,7 @@ Accurate nutritional estimates for typical local portion sizes.`,
       {step === 'mood-check' && (
         <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           {/* Header section */}
-          <div style={{ padding: '56px 20px 20px', textAlign: 'center' }}>
+          <div style={{ padding: '56px 20px 16px', textAlign: 'center' }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>✨</div>
             <div style={{ fontFamily: 'var(--serif)', fontSize: 24, fontWeight: 500, color: 'var(--text)', marginBottom: 6 }}>
               Meal logged!
@@ -2050,10 +2213,60 @@ Accurate nutritional estimates for typical local portion sizes.`,
             <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
               {savedMealName} · {savedMealCalories} kcal
             </div>
+            {/* Streak celebration */}
+            {postStats && postStats.firstOfDay && postStats.streak >= 1 && (
+              <div
+                className="mb-pop"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginTop: 12,
+                  padding: [3, 7, 30].includes(postStats.streak) ? '8px 18px' : '5px 14px',
+                  borderRadius: 999,
+                  background: 'var(--accent-wash)',
+                  border: '1px solid var(--accent-line)',
+                  fontFamily: 'var(--sans)',
+                  fontSize: [3, 7, 30].includes(postStats.streak) ? 15 : 13,
+                  fontWeight: 700,
+                  color: 'var(--accent)',
+                }}
+              >
+                {postStats.streak === 7
+                  ? 'One full week 🔥🔥'
+                  : postStats.streak === 30
+                    ? 'Thirty days strong 🔥🔥🔥'
+                    : postStats.streak === 3
+                      ? '3 days in a row 🔥🔥'
+                      : postStats.streak === 1
+                        ? 'Streak started 🔥'
+                        : `Day ${postStats.streak} in a row 🔥`}
+              </div>
+            )}
           </div>
 
+          {/* Updated daily totals — the number the logger actually wants */}
+          {postStats && (() => {
+            const t = macroTargets(profile)
+            const remaining = Math.max(0, t.calories - postStats.todayTotal)
+            const delta = postStats.yesterdayTotal != null ? Math.round(postStats.todayTotal - postStats.yesterdayTotal) : null
+            return (
+              <Card style={{ margin: '0 20px 14px', textAlign: 'center', padding: '14px 16px' }}>
+                <div style={{ fontFamily: 'var(--sans)', fontSize: 14, color: 'var(--text)', fontWeight: 600 }}>
+                  You're at {Math.round(postStats.todayTotal).toLocaleString()} of {t.calories.toLocaleString()} kcal
+                  <span style={{ color: 'var(--accent)' }}> — {Math.round(remaining).toLocaleString()} left</span>
+                </div>
+                {delta != null && (
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-dim)', marginTop: 4 }}>
+                    {delta === 0 ? 'level with yesterday' : `${Math.abs(delta).toLocaleString()} kcal ${delta < 0 ? 'behind' : 'ahead of'} yesterday so far`}
+                  </div>
+                )}
+              </Card>
+            )
+          })()}
+
           {/* AI Observation card */}
-          <Card style={{ margin: '0 20px 20px', background: 'var(--accent-wash)', border: '1px solid var(--accent-line)' }}>
+          <Card style={{ margin: '0 20px 16px', background: 'var(--accent-wash)', border: '1px solid var(--accent-line)' }}>
             <div style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--mono)', fontWeight: 600, letterSpacing: '0.12em', marginBottom: 8 }}>
               ✦ SAGE OBSERVATION
             </div>
@@ -2062,81 +2275,134 @@ Accurate nutritional estimates for typical local portion sizes.`,
             </div>
           </Card>
 
-          {/* Mood prompt label */}
-          <div style={{ padding: '0 20px 12px' }}>
-            <span style={{ fontFamily: 'var(--sans)', fontSize: 11, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--text-dim)' }}>
-              HOW ARE YOU FEELING?
-            </span>
-          </div>
-
-          {/* Mood grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '0 20px' }}>
-            {POST_MOODS.map(m => {
-              const on = selectedPostMood === m.key
-              return (
-                <button
-                  key={m.key}
-                  onClick={() => setSelectedPostMood(m.key)}
+          {/* Optional mood — one tap continues straight into Sage's mood chat */}
+          {showMoodChips ? (
+            <>
+              <div style={{ padding: '0 20px 12px' }}>
+                <span style={{ fontFamily: 'var(--sans)', fontSize: 11, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--text-dim)' }}>
+                  HOW ARE YOU FEELING? <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>(optional)</span>
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '0 20px' }}>
+                {POST_MOODS.map(m => {
+                  const on = selectedPostMood === m.key
+                  return (
+                    <button
+                      key={m.key}
+                      onClick={() => {
+                        haptic()
+                        setSelectedPostMood(m.key)
+                        handleFinishLogging(m.key)
+                      }}
+                      disabled={savingMood}
+                      className="mb-press"
+                      style={{
+                        background: on ? `oklch(0.78 0.09 ${m.hue} / 0.15)` : 'var(--surface)',
+                        border: on ? `1.5px solid oklch(0.78 0.09 ${m.hue})` : '1px solid var(--line)',
+                        borderRadius: 18,
+                        padding: '16px 12px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 8,
+                        opacity: savingMood && !on ? 0.5 : 1,
+                      }}
+                    >
+                      <span style={{ fontSize: 30 }}>{m.emoji}</span>
+                      <span style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: on ? `oklch(0.82 0.08 ${m.hue})` : 'var(--text-muted)',
+                        fontFamily: 'var(--sans)',
+                      }}>
+                        {m.key}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              {/* Don't-ask preference */}
+              <button
+                onClick={() => {
+                  const next = !skipMoodAsk
+                  setSkipMoodAsk(next)
+                  if (next) localStorage.setItem(SKIP_MOOD_KEY, '1')
+                  else localStorage.removeItem(SKIP_MOOD_KEY)
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-dim)',
+                  fontFamily: 'var(--sans)',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  padding: '12px 20px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  alignSelf: 'flex-start',
+                }}
+              >
+                <span
                   style={{
-                    background: on ? `oklch(0.78 0.09 ${m.hue} / 0.15)` : 'var(--surface)',
-                    border: on ? `1.5px solid oklch(0.78 0.09 ${m.hue})` : '1px solid var(--line)',
-                    borderRadius: 18,
-                    padding: '18px 12px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
+                    width: 16,
+                    height: 16,
+                    borderRadius: 5,
+                    border: '1.5px solid var(--line)',
+                    background: skipMoodAsk ? 'var(--accent)' : 'transparent',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 8,
+                    justifyContent: 'center',
+                    color: 'var(--on-accent)',
+                    fontSize: 10,
+                    flexShrink: 0,
                   }}
                 >
-                  <span style={{ fontSize: 32 }}>{m.emoji}</span>
-                  <span style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: on ? `oklch(0.82 0.08 ${m.hue})` : 'var(--text-muted)',
-                    fontFamily: 'var(--sans)',
-                  }}>
-                    {m.key}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Finish Logging button + Skip link */}
-          <div style={{ padding: '24px 20px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+                  {skipMoodAsk ? '✓' : ''}
+                </span>
+                Don't ask after every meal
+              </button>
+            </>
+          ) : (
             <button
-              onClick={handleFinishLogging}
-              disabled={!selectedPostMood || savingMood}
+              onClick={() => setShowMoodChips(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--accent)',
+                fontFamily: 'var(--sans)',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                padding: '0 20px',
+                textAlign: 'left',
+              }}
+            >
+              + Add how you're feeling
+            </button>
+          )}
+
+          {/* Done — logging is already complete; mood was the optional extra */}
+          <div style={{ padding: '20px 20px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+            <button
+              onClick={() => handleFinishLogging(null)}
+              disabled={savingMood}
               style={{
                 width: '100%',
                 height: 56,
-                background: selectedPostMood && !savingMood ? 'var(--accent)' : 'var(--surface-2)',
-                color: selectedPostMood && !savingMood ? 'var(--on-accent)' : 'var(--text-dim)',
+                background: savingMood ? 'var(--surface-2)' : 'var(--accent)',
+                color: savingMood ? 'var(--text-dim)' : 'var(--on-accent)',
                 border: 'none',
                 borderRadius: 28,
                 fontFamily: 'var(--sans)',
                 fontSize: 15,
                 fontWeight: 700,
-                cursor: selectedPostMood && !savingMood ? 'pointer' : 'not-allowed',
+                cursor: savingMood ? 'not-allowed' : 'pointer',
                 transition: 'background 0.2s, color 0.2s',
               }}
             >
-              {savingMood ? '…' : 'Finish Logging'}
-            </button>
-            <button
-              onClick={() => go('home')}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-dim)',
-                fontFamily: 'var(--sans)',
-                fontSize: 13,
-                cursor: 'pointer',
-                padding: '4px 8px',
-              }}
-            >
-              Skip to home
+              {savingMood ? '…' : 'Done'}
             </button>
           </div>
         </div>

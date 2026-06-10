@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { Ring } from '../components/ui'
 import { calculateMacroTargets } from '../lib/macros'
 import { GOALS } from '../lib/goals'
+import { generateMealPlan } from '../lib/mealPlan'
 
 interface OnboardingScreenProps {
   go: (screen: string) => void
@@ -58,13 +59,6 @@ const ACTIVITY_MULTIPLIERS: Record<ActivityKey, number> = {
   light: 1.375,
   moderate: 1.55,
   active: 1.725,
-}
-
-function bmiLabel(bmi: number): string {
-  if (bmi < 18.5) return 'Underweight'
-  if (bmi < 25) return 'Normal'
-  if (bmi < 30) return 'Overweight'
-  return 'Obese'
 }
 
 function calcAge(dob: string): number {
@@ -386,11 +380,11 @@ function Step1({
   setFormGender,
   onContinue,
 }: Step1Props) {
+  // Last name and username are optional — every unexplained required field is
+  // first-run drop-off, and nothing in the app needs them yet.
   const canContinue =
     primaryGoal.length > 0 &&
     firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
-    formUsername.trim().length > 0 &&
     dob.length > 0 &&
     calculatedAge !== null &&
     calculatedAge >= 13
@@ -485,20 +479,19 @@ function Step1({
 
       {/* Last Name */}
       <div>
-        <label style={labelStyle}>Last Name</label>
+        <label style={labelStyle}>Last Name <span style={{ color: 'var(--text-dim)', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
         <input
           type="text"
           placeholder="Smith"
           value={lastName}
           onChange={(e) => setLastName(e.target.value)}
           style={inputStyle}
-          required
         />
       </div>
 
       {/* Username */}
       <div>
-        <label style={labelStyle}>Username</label>
+        <label style={labelStyle}>Username <span style={{ color: 'var(--text-dim)', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
         <div style={{ position: 'relative' }}>
           <span
             style={{
@@ -522,7 +515,6 @@ function Step1({
               setFormUsername(e.target.value.replace(/[^a-z0-9_]/gi, '').toLowerCase())
             }
             style={{ ...inputStyle, paddingLeft: 28 }}
-            required
           />
         </div>
       </div>
@@ -538,13 +530,25 @@ function Step1({
           style={inputStyle}
           required
         />
+        <p
+          style={{
+            fontFamily: 'var(--sans)',
+            fontSize: 12,
+            color: 'var(--text-dim)',
+            marginTop: 6,
+            paddingLeft: 2,
+            lineHeight: 1.4,
+          }}
+        >
+          Used with height &amp; weight to calculate your daily energy needs.
+        </p>
         {calculatedAge !== null && dob && (
           <p
             style={{
               fontFamily: 'var(--sans)',
               fontSize: 13,
               color: 'var(--accent)',
-              marginTop: 6,
+              marginTop: 4,
               paddingLeft: 2,
             }}
           >
@@ -803,19 +807,29 @@ function Step2({
             {weightDisplayUnit}
           </span>
         </div>
-        {/* BMI preview */}
+        {/* BMI preview — neutral number on a range band, never a clinical
+            label stamped in celebratory gold (this is a mindfulness app). */}
         {calculatedBmi !== null && (
-          <p
-            style={{
-              fontFamily: 'var(--sans)',
-              fontSize: 12,
-              color: 'var(--accent)',
-              marginTop: 6,
-              paddingLeft: 2,
-            }}
-          >
-            BMI: {calculatedBmi} — {bmiLabel(calculatedBmi)}
-          </p>
+          <div style={{ marginTop: 8, paddingLeft: 2 }}>
+            <p style={{ fontFamily: 'var(--sans)', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+              BMI: <span style={{ fontWeight: 600, color: 'var(--text)' }}>{calculatedBmi}</span>
+            </p>
+            <div style={{ position: 'relative', height: 5, borderRadius: 5, overflow: 'visible', background: 'linear-gradient(to right, oklch(0.74 0.08 230), oklch(0.75 0.10 150) 30%, oklch(0.76 0.11 85) 62%, oklch(0.68 0.13 30))' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${Math.min(96, Math.max(2, ((calculatedBmi - 14) / 22) * 100))}%`,
+                  top: -3,
+                  width: 11,
+                  height: 11,
+                  borderRadius: '50%',
+                  background: 'var(--text)',
+                  border: '2px solid var(--bg)',
+                  transform: 'translateX(-50%)',
+                }}
+              />
+            </div>
+          </div>
         )}
       </div>
 
@@ -1112,11 +1126,22 @@ function Step3({
             </option>
           ))}
         </select>
+        <p
+          style={{
+            fontFamily: 'var(--sans)',
+            fontSize: 12,
+            color: 'var(--text-dim)',
+            marginTop: 8,
+            paddingLeft: 2,
+          }}
+        >
+          Sets your local food suggestions and units
+        </p>
       </div>
 
       {/* City */}
       <div>
-        <label style={labelStyle}>City</label>
+        <label style={labelStyle}>City <span style={{ color: 'var(--text-dim)', fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
         <input
           type="text"
           placeholder="Your city"
@@ -1269,17 +1294,22 @@ function Step4({
           />
           <SummaryItem
             label="BMI"
-            value={
-              calculatedBmi !== null
-                ? `${calculatedBmi} · ${bmiLabel(calculatedBmi)}`
-                : '—'
-            }
+            value={calculatedBmi !== null ? `${calculatedBmi}` : '—'}
           />
           <SummaryItem
             label="Goal"
             value={goalWeightKg > 0 ? `${goalWeightKg.toFixed(1)} kg` : '—'}
           />
         </div>
+
+        {/* Goal-pace framing instead of a clinical category on the celebration screen */}
+        {weightKg > 0 && goalWeightKg > 0 && Math.abs(weightKg - goalWeightKg) >= 0.5 && (
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+            {weightKg > goalWeightKg
+              ? `Your plan targets ${(weightKg - goalWeightKg).toFixed(1)} kg over ~${Math.max(1, Math.round((weightKg - goalWeightKg) / 0.5))} weeks — a sustainable pace.`
+              : `Your plan targets ${(goalWeightKg - weightKg).toFixed(1)} kg of healthy gain at a steady pace.`}
+          </p>
+        )}
 
         <div style={{ height: 1, background: 'var(--line)' }} />
 
@@ -1633,6 +1663,22 @@ export function OnboardingScreen({ go }: OnboardingScreenProps) {
       )
       if (err) throw new Error(err.message)
       await refreshProfile()
+
+      // Kick off the first meal plan in the background with the values just
+      // saved — the user lands on Home with "Sage is building your day…" and
+      // a real plan moments later, instead of an empty "No plan yet" promise.
+      generateMealPlan(user.id, {
+        dietary_prefs: selectedPrefs.join(','),
+        daily_calorie_goal: calorieGoal ?? undefined,
+        cuisine_pref: (cuisine === 'Other' && customCuisine.trim()) ? customCuisine.trim() : (cuisine || null),
+        goal_weight: goalWeightKg || null,
+        weight: weightKg || null,
+        wake_time: null,
+        sleep_time: null,
+      }).catch(() => {
+        // best-effort — the Meal Plan screen can always generate on demand
+      })
+
       setSaving(false)
       go('home')
     } catch (err) {

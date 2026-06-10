@@ -1,8 +1,36 @@
-import { useEffect, useState } from 'react'
-import { Card, Eyebrow, Spinner, Ring } from '../components/ui'
+import React, { useEffect, useState } from 'react'
+import { Card, Eyebrow, Spinner, Ring, IconButton, toast, haptic } from '../components/ui'
 import { IconChevL, IconPlus } from '../components/icons'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { localDateKey, dayLabel2 } from '../lib/dates'
+
+// Local water glyphs (line icons, stroke = currentColor) — replaces the old
+// 🥛/🍶 emoji which read as milk and sake, not water.
+function GlyphCup({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 4h12l-1.2 14.5a2 2 0 0 1-2 1.5H9.2a2 2 0 0 1-2-1.5L6 4z" />
+      <path d="M6.8 11h10.4" />
+    </svg>
+  )
+}
+function GlyphBottle({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 2h4" />
+      <path d="M10.5 2v3.2L8.6 8.4A3 3 0 0 0 8 10.2V19a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-8.8a3 3 0 0 0-.6-1.8l-1.9-3.2V2" />
+      <path d="M8 13.5h8" />
+    </svg>
+  )
+}
+function GlyphDrop({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3s6.5 7 6.5 11.5a6.5 6.5 0 0 1-13 0C5.5 10 12 3 12 3z" />
+    </svg>
+  )
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,22 +52,15 @@ const WATER_COLOR = 'oklch(0.74 0.10 230)'
 const WATER_TRACK = 'oklch(0.74 0.10 230 / 0.16)'
 const GOAL_ML = 2000
 
-const QUICK_ADDS: { label: string; emoji: string; ml: number }[] = [
-  { label: 'Glass', emoji: '🥛', ml: 250 },
-  { label: 'Bottle', emoji: '🍶', ml: 500 },
-  { label: 'Large', emoji: '💧', ml: 750 },
+const QUICK_ADDS: { label: string; glyph: React.ReactNode; ml: number }[] = [
+  { label: 'Glass', glyph: <GlyphCup />, ml: 250 },
+  { label: 'Bottle', glyph: <GlyphBottle />, ml: 500 },
+  { label: 'Large', glyph: <GlyphDrop />, ml: 750 },
 ]
-
-const DAY_CHARS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toYMD(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
+const toYMD = localDateKey
 
 function formatLiters(ml: number): string {
   if (ml >= 1000) {
@@ -115,19 +136,45 @@ export function WaterScreen({ go }: WaterScreenProps) {
   async function addWater(ml: number) {
     if (!user || adding) return
     setAdding(true)
-    const { error } = await supabase.from('water_logs').insert({
+    haptic()
+    // Optimistic: show the log immediately, roll back if the insert fails.
+    const tempId = `temp-${Math.random().toString(36).slice(2)}`
+    const optimistic: WaterLog = {
+      id: tempId,
       user_id: user.id,
       date: today,
       amount_ml: ml,
-    })
-    if (!error) await load()
+      logged_at: new Date().toISOString(),
+    }
+    setTodayLogs((prev) => [optimistic, ...prev])
+    const { data, error } = await supabase
+      .from('water_logs')
+      .insert({ user_id: user.id, date: today, amount_ml: ml })
+      .select()
+      .single()
+    if (error || !data) {
+      setTodayLogs((prev) => prev.filter((l) => l.id !== tempId))
+      toast("Couldn't save — you're offline", { type: 'error' })
+    } else {
+      const saved = data as WaterLog
+      setTodayLogs((prev) => prev.map((l) => (l.id === tempId ? saved : l)))
+      setWeekLogs((prev) => [...prev, saved])
+      toast(`${ml}ml logged`, { action: { label: 'Undo', onClick: () => undo(saved.id) } })
+    }
     setAdding(false)
   }
 
   async function undo(id: string) {
     if (!user) return
+    // Optimistic removal with rollback.
+    const removed = todayLogs.find((l) => l.id === id)
+    setTodayLogs((prev) => prev.filter((l) => l.id !== id))
+    setWeekLogs((prev) => prev.filter((l) => l.id !== id))
     const { error } = await supabase.from('water_logs').delete().eq('id', id)
-    if (!error) await load()
+    if (error) {
+      if (removed) setTodayLogs((prev) => [removed, ...prev])
+      toast("Couldn't undo — you're offline", { type: 'error' })
+    }
   }
 
   const total = todayLogs.reduce((s, l) => s + (l.amount_ml || 0), 0)
@@ -143,14 +190,14 @@ export function WaterScreen({ go }: WaterScreenProps) {
     const d = new Date()
     d.setDate(d.getDate() - i)
     const ymd = toYMD(d)
-    const di = d.getDay()
     weekData.push({
-      label: DAY_CHARS[di === 0 ? 6 : di - 1],
+      label: dayLabel2(ymd),
       ml: weekMap.get(ymd) || 0,
       isToday: i === 0,
     })
   }
   const weekMax = Math.max(...weekData.map((d) => d.ml), GOAL_ML)
+  const [selectedBar, setSelectedBar] = useState<number | null>(null)
 
   return (
     <div
@@ -166,20 +213,9 @@ export function WaterScreen({ go }: WaterScreenProps) {
     >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-        <button
-          onClick={() => go('settings')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <IconChevL size={20} />
-        </button>
+        <IconButton label="Back" onClick={() => go('back')} style={{ color: 'var(--text-muted)', marginLeft: -10 }}>
+          <IconChevL size={22} />
+        </IconButton>
         <h1
           style={{
             position: 'absolute',
@@ -262,7 +298,7 @@ export function WaterScreen({ go }: WaterScreenProps) {
                     transition: 'opacity 0.15s ease',
                   }}
                 >
-                  <span style={{ fontSize: 24, lineHeight: 1 }}>{q.emoji}</span>
+                  <span style={{ color: WATER_COLOR, display: 'flex', lineHeight: 1 }}>{q.glyph}</span>
                   <span
                     style={{
                       fontFamily: 'var(--sans)',
@@ -344,31 +380,93 @@ export function WaterScreen({ go }: WaterScreenProps) {
           <div>
             <Eyebrow style={{ display: 'block', marginBottom: 10 }}>Last 7 days</Eyebrow>
             <Card>
-              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: 100, gap: 8 }}>
-                {weekData.map((d, i) => (
-                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <div
+              {selectedBar !== null && weekData[selectedBar] && (
+                <div
+                  style={{
+                    fontFamily: 'var(--mono)',
+                    fontSize: 12,
+                    color: 'var(--text-muted)',
+                    marginBottom: 8,
+                    textAlign: 'center',
+                  }}
+                >
+                  {weekData[selectedBar].label}: {formatLiters(weekData[selectedBar].ml)}
+                  {' · '}
+                  {weekData[selectedBar].ml >= GOAL_ML
+                    ? 'goal hit 💧'
+                    : `${formatLiters(GOAL_ML - weekData[selectedBar].ml)} short of goal`}
+                </div>
+              )}
+              <div style={{ position: 'relative' }}>
+                {/* 2L goal line */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: 26 + (GOAL_ML / weekMax) * 80,
+                    borderTop: `1.5px dashed ${WATER_COLOR}`,
+                    opacity: 0.55,
+                    pointerEvents: 'none',
+                  }}
+                />
+                <span
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    bottom: 28 + (GOAL_ML / weekMax) * 80,
+                    fontFamily: 'var(--mono)',
+                    fontSize: 9,
+                    color: WATER_COLOR,
+                    opacity: 0.8,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  2L
+                </span>
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: 106, gap: 8 }}>
+                  {weekData.map((d, i) => (
+                    <button
+                      key={i}
+                      aria-label={`${d.label}: ${formatLiters(d.ml)}`}
+                      onClick={() => setSelectedBar(selectedBar === i ? null : i)}
                       style={{
-                        width: '100%',
-                        maxWidth: 28,
-                        height: Math.max(4, (d.ml / weekMax) * 80),
-                        background: d.isToday ? WATER_COLOR : WATER_TRACK,
-                        borderRadius: 5,
-                        transition: 'height 0.5s ease',
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontFamily: 'var(--mono)',
-                        fontSize: 10,
-                        color: d.isToday ? WATER_COLOR : 'var(--text-dim)',
-                        fontWeight: d.isToday ? 600 : 400,
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: 6,
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        height: '100%',
                       }}
                     >
-                      {d.label}
-                    </span>
-                  </div>
-                ))}
+                      <div
+                        style={{
+                          width: '100%',
+                          maxWidth: 28,
+                          height: Math.max(4, (d.ml / weekMax) * 80),
+                          background: d.isToday || selectedBar === i ? WATER_COLOR : WATER_TRACK,
+                          borderRadius: 5,
+                          transition: 'height 0.5s ease',
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontFamily: 'var(--mono)',
+                          fontSize: 10,
+                          color: d.isToday ? WATER_COLOR : 'var(--text-dim)',
+                          fontWeight: d.isToday ? 600 : 400,
+                        }}
+                      >
+                        {d.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </Card>
           </div>

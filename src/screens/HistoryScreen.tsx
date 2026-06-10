@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import type { Meal } from '../types'
-import { Card, Eyebrow, Spinner } from '../components/ui'
-import { IconChevL, IconBook, IconFlame, IconClose } from '../components/icons'
+import { Card, Eyebrow, Spinner, toast, haptic } from '../components/ui'
+import { IconChevL, IconBook, IconFlame, IconClose, IconRetake } from '../components/icons'
 
 interface HistoryScreenProps {
   go: (screen: string) => void
@@ -91,6 +91,41 @@ export function HistoryScreen({ go }: HistoryScreenProps) {
     } finally {
       setLoadingMore(false)
     }
+  }
+
+  // One-tap "log again": re-log a past meal's items as a fresh meal right now.
+  const [relogging, setRelogging] = useState<string | null>(null)
+  async function handleLogAgain(meal: Meal) {
+    if (!user || relogging) return
+    setRelogging(meal.id)
+    haptic()
+    const { data, error } = await supabase
+      .from('meals')
+      .insert({
+        user_id: user.id,
+        image_url: meal.image_url,
+        items_json: meal.items_json,
+        total_calories: meal.total_calories,
+        macros_json: meal.macros_json,
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+    if (error || !data) {
+      toast("Couldn't log — you're offline", { type: 'error' })
+    } else {
+      setMeals((prev) => [data as Meal, ...prev])
+      toast(`Logged again — ${Math.round(meal.total_calories)} kcal`, {
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            await supabase.from('meals').delete().eq('id', (data as Meal).id)
+            setMeals((prev) => prev.filter((m) => m.id !== (data as Meal).id))
+          },
+        },
+      })
+    }
+    setRelogging(null)
   }
 
   async function handleDelete(mealId: string) {
@@ -282,7 +317,29 @@ export function HistoryScreen({ go }: HistoryScreenProps) {
                           </p>
                         </div>
 
-                        {/* Delete button */}
+                        {/* Log again + delete */}
+                        <button
+                          onClick={() => handleLogAgain(meal)}
+                          aria-label="Log this meal again"
+                          disabled={relogging === meal.id}
+                          className="mb-press"
+                          style={{
+                            background: 'var(--accent-wash)',
+                            border: '1px solid var(--accent-line)',
+                            borderRadius: 10,
+                            width: 34,
+                            height: 34,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--accent)',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                            opacity: relogging === meal.id ? 0.5 : 1,
+                          }}
+                        >
+                          <IconRetake size={15} />
+                        </button>
                         <button
                           onClick={() => handleDelete(meal.id)}
                           aria-label="Delete meal"
@@ -290,8 +347,8 @@ export function HistoryScreen({ go }: HistoryScreenProps) {
                             background: 'var(--surface-2)',
                             border: '1px solid var(--line)',
                             borderRadius: 10,
-                            width: 30,
-                            height: 30,
+                            width: 34,
+                            height: 34,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
